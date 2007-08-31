@@ -11,21 +11,21 @@ class Count( _Agg_1Target_1Source):
         self.target = target
     source = property( lambda self: self.key.parent)
     _sqlfunc = func.count
-    def oninsert( self, aggregator, instance):
+    def oninsert( self, func_checker, instance):
         return self._target_expr + 1
-    def ondelete( self, aggregator, instance):
+    def ondelete( self, func_checker, instance):
         return self._target_expr - 1
-    def onupdate( self, aggregator, instance):
+    def onupdate( self, func_checker, instance):
         return ()
 
 
 class Sum( _Agg_1Target_1Source):
     _sqlfunc = func.sum
-    def oninsert( self, aggregator, instance):
+    def oninsert( self, func_checker, instance):
         return self._target_expr + self.value( instance)
-    def ondelete( self, aggregator, instance):
+    def ondelete( self, func_checker, instance):
         return self._target_expr - self.oldv( instance)
-    def onupdate( self, aggregator, instance):
+    def onupdate( self, func_checker, instance):
         return self._target_expr - self.oldv( instance) + self.value( instance)
 
 _func_if = getattr( func, 'if')
@@ -38,23 +38,24 @@ class Max( _Agg_1Target_1Source):
         return _func_if( (a == None) | (a < b), b, a)
     _comparator4updins = operator.ge
 
-    def _agg_func( self, aggregator, a, b):
-        if aggregator.db_supports( self._sqlfunc_name):
+    def _agg_func( self, func_checker, a, b):
+        if func_checker( self._sqlfunc_name):
             return self._sqlfunc( _func_ifnull(a,b), b)
         else:
             return self._substitute_func( a,b)
 
-    def oninsert( self, aggregator, instance):
-        return self._agg_func( aggregator, self.target, self.value( instance))
-    def onupdate( self, aggregator, instance):
+    def oninsert( self, func_checker, instance):
+        return self._agg_func( func_checker, self.target, self.value( instance))
+    def onupdate( self, func_checker, instance):
         if self._comparator4updins( self.value( instance), self.oldv( instance)):
-            return self.oninsert( aggregator, instance)
+            return self.oninsert( func_checker, instance)
         else:
-            return self.onrecalc( aggregator, instance, False)
-    def ondelete( self, aggregator, instance):
-        return self.onrecalc( aggregator, instance, True)
+            return self.onrecalc( func_checker, instance, False)
+    def ondelete( self, func_checker, instance):
+        return self.onrecalc( func_checker, instance, True)
         #XXX is recalc needed only if curvalue==maxvalue, else nothing ?
         #e.g. if self.oldv( instance) == current_target_value: then onrecalc()
+        #but no way to gt current_target_value...
 
 
 class Min( Max):
