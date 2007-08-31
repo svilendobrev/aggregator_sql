@@ -1,7 +1,11 @@
-'''
+#$Id$
+
+'''80% remade by sdobrev.
+it was:
 Name: SQLAlchemyAggregator
 Version: 0.1.2.dev-r779
-Summary: SQLAlchemy's mapper extension which can automatically track changes in mapped classes andcalculate aggregations based on them
+Summary: SQLAlchemy's mapper extension which can automatically track changes in
+         mapped instances and calculate aggregations based on them
 Home-page: http://www.mr-pc.kiev.ua/en/projects/SQLAlchemyAggregator
 Author: Paul Colomiets
 Author-email: pc@gafol.net
@@ -10,7 +14,10 @@ Author-email: pc@gafol.net
 from sqlalchemy.orm import MapperExtension, EXT_CONTINUE
 from sqlalchemy import func, select
 
-if_func = getattr( func, 'if')
+_func_if = getattr( func, 'if')
+_func_if_null = func.ifnull
+_func_max = func.max
+_func_min = func.min
 
 class _Aggregation( object):
     """Base class for aggregations. Some assumptions:
@@ -61,7 +68,7 @@ class _Agg_1Target_1Source( _Aggregation):
         self.source = source
 
     table = property( lambda self: self.target.table)
-    _target_expr = property( lambda self: func.ifnull( self.target, 0) )
+    _target_expr = property( lambda self: _func_ifnull( self.target, 0) )
     def _filter_expr( self, instance, old): return self.key.parent == self._get_grouping_attribute( instance, old)
 
     def value( self, instance): return getattr( instance, self.source.name)
@@ -263,15 +270,15 @@ class Quick( MapperExtension):
 
     def max( self, a, b):
         if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return if_func( (a == None) | (a < b), b, a)
+            return _func_if( (a == None) | (a < b), b, a)
         else:
-            return func.max( func.ifnull(a,b), b)
+            return _func_max( _func_ifnull(a,b), b)
 
     def min( self, a, b):
         if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return if_func( (a == None) | (a > b), b, a)
+            return _func_if( (a == None) | (a > b), b, a)
         else:
-            return func.min( func.ifnull(a,b), b)
+            return _func_min( _func_ifnull(a,b), b)
 
 class Accurate( Quick):
     """Mapper extension which maintains aggregations
@@ -282,3 +289,4 @@ class Accurate( Quick):
     _insert_method = 'onrecalc'
     _delete_method = 'onrecalc_old'
 
+# vim:ts=4:sw=4:expandtab
