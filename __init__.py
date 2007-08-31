@@ -71,18 +71,6 @@ class _Agg_1Target_1Source( _Aggregation):
     def onrecalc( self, aggregator, instance, old =False):
         return select( [self._sqlfunc( self.source)], self._filter_expr( instance, old) )
 
-if 0:
-    a.Sum( target= counters.c.count, source= movies.c.tag,
-            filter= tags.c.table == "movies" & tags.c.object_id == movies.c.id )
-    #-> sql: update counter.count
-    #        where counter.table = "movies" AND counter.object_id = 123
-
-    mapperExtcond= tags.c.table == "movies" & tags.c.object_id == current_source_instance(counter.object_id)
-    onrecalc_cond= tags.c.object_id == current_source_instance(counter.object_id)
-    #-> sql: count(tags.tag)
-    #        where tags.table = "movies" AND tags.object_id = 123
-
-
 
 class Count( _Agg_1Target_1Source):
     'special case, no real source column needed - just source table, and any column in it'
@@ -121,9 +109,9 @@ class Max( _Agg_1Target_1Source):
         else:
             return self.onrecalc( aggregator, instance, False)
     def ondelete( self, aggregator, instance):
-        #XXX recalc needed only if curvalue==maxvalue, else nothing
-        #if self.oldv( instance) == current_target_value: onrecalc()
         return self.onrecalc( aggregator, instance, True)
+        #XXX is recalc needed only if curvalue==maxvalue, else nothing ?
+        #e.g. if self.oldv( instance) == current_target_value: then onrecalc()
 
 
 class Min( Max):
@@ -253,8 +241,6 @@ class Quick( MapperExtension):
             anyfield = fields[0]    # They all have same 'key' and 'grouping_attribute' attributes
             update_condition = anyfield.key.column == org_value_getter( instance, anyfield.grouping_attribute)
             table.update( update_condition, values=updates ).execute()
-            #XXX what if update_condition not met?
-
 
     def after_insert( self, mapper, connection, instance):
         """called after an object instance has been INSERTed"""
@@ -295,3 +281,4 @@ class Accurate( Quick):
     """
     _insert_method = 'onrecalc'
     _delete_method = 'onrecalc_old'
+
