@@ -1,23 +1,39 @@
 #$Id$
 # -*- coding: cp1251 -*-
 
-'''Converts a sqlalchemy expression for usage in aggregator's recalc- and mapperext-update- level
-filtering. The 'corresp_src_col' notion is used to obtain the name of an attribute in the source
-instance which value is to be replaced (via bindparm) instead of that target column in the expression.
+'''Converts a sqlalchemy expression for usage in aggregator's recalc- and
+mapperext-update- level filtering.
+
+The 'corresp_src_col' notion of some target column is used to obtain the name
+of an attribute in the source instance which value is to be put (via bindparm)
+instead of that column in the expression. This is not usualy needed - see note below.
+
 Usage:
-    new_expr,src_attrs4mapper = Converter.apply( input_expr, inside_mapperext=boolean, ...)
+    new_expr,src_attrs4mapper = Converter.apply( input_expr, inside_mapperext=boolean, ..)
 src_attrs4mapper is list of src-instance's attribute names to give as bindparams
 to specify which is what, in the input_expr, either of these can be used:
- - wrap columns in the expression with Source() and Target() markers, may give corresp_src= of Targets.
-    These have higher priority than table-based guessing;
- - if source_tbl and/or target_tbl is specified, applies table-based guessing of respectively
-    source/target columns; needs the global corresp_src_cols.
-in either case a global corresp_src_cols dict{target_col:src_col} may be specified.
+ - wrap columns in the expression with Source() and/or Target( corresp_src=)
+    markers, These have higher priority than table-based guessing;
+ - if source_tbl and/or target_tbl is specified, applies table-based guessing of
+    respectively source/target columns; needs the global corresp_src_cols.
+in either case a global corresp_src_cols dict{ target_col:src_col } may be specified.
+To replace a subexpressoin with True for mapperext-filter, wrap it with SourceRecalcOnly()
+
+Note: The corresp_src_cols is needed in internal onrecalc select, but as it is
+correlated to the external, any matching Target columns will be as of external
+one, which would have correct values.
+Hence no need to replace it with some value, hence no need to mark it at all.
+Hence the default Target( corresp_src_col ) is now None, and target-table guessing
+will mark as Target only if corresp_src_col is specified in the dict.
+
+
+
+'''
+_no_more = '''
 To avoid some target column being replaced with corresp_src_col, do one of:
     - dont use target_tbl guessing AND dont mark it as Target
     - mark it as Target with corresp_src=None
     - specify entry in overall corresp_src_cols for that column to be None
-To replace a subexpressoin with True for mapperext-filter, wrap it with SourceRecalcOnly()
 '''
 
 import sqlalchemy
@@ -45,7 +61,7 @@ class _Source( _ColumnMarker):
     ret_col_inside_mapperext = False
 
 class _Target( _ColumnMarker):
-    def __init__( me, col, corresp_src ='otherside'):
+    def __init__( me, col, corresp_src =None): #'otherside'):
         me.col = col
         me.corresp_src_col = corresp_src
     ret_col_inside_mapperext = True
@@ -66,11 +82,12 @@ class Converter( sqlalchemy.sql.util.AbstractClauseProcessor):
             try:
                 mark = e.mark
             except:
+                mark = None
                 if me.target_tbl and e.table == me.target_tbl:
-                    mark = _Target( e, corresp_src= me.corresp_src_cols.get( e, 'unknown') )
+                    corresp_src= me.corresp_src_cols.get( e, None)
+                    if corresp_src: mark = _Target( e, corresp_src)
                 elif me.source_tbl and e.table == me.source_tbl:
                     mark = _Source( e)
-                else: mark = None
             if mark:
                 assert isinstance( mark, _ColumnMarker)
                 col,src_attrs4mapper = mark.get( me.inside_mapperext)
@@ -159,15 +176,18 @@ WHERE movies.id = :cur_movie__id
             movies = Table( 'movies', me.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', String) )
             Count( movies.c.count, and_(
                 SourceRecalcOnly( tags.c.tabl == "movies"),
-                me.Source( tags.c.oid) == me.Target( movies.c.id, corresp_src=tags.c.oid)
-            ), source_tbl=tags, corresp_src_cols= { movies.c.id: tags.c.oid }, out=me.out )
+                me.Source( tags.c.oid) == movies.c.id
+            ), source_tbl=tags, out=me.out )
             me.check( expect = '''
 --- tags.tabl = :const('movies') AND tags.oid = movies.id
-recalc   >> tags.tabl = :const('movies') AND tags.oid = :BindParam(oid)
-   src_attr ['oid']
+recalc   >> tags.tabl = :const('movies') AND tags.oid = movies.id
+   src_attr []
 mapper   >> :const(True) AND :BindParam(oid) = movies.id
    src_attr ['tabl', 'oid']
 ''')
+#was this, but internal select is correlated to external/target, hence no need to touch movies.id
+#recalc   >> tags.tabl = :const('movies') AND tags.oid = :BindParam(oid)
+#   src_attr ['oid']
 
         def test2_count_userpics_per_user(me):
             if 0: print '''
@@ -184,16 +204,19 @@ WHERE users.uid = :uid AND :state = "normal"
             users   = Table( 'users',    me.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', String), )
             userpics= Table( 'userpics', me.m, Column( 'uid', Integer), Column( 'state', String), )
             Count( users.c.count, and_(
-                me.Target( users.c.id, corresp_src=userpics.c.uid) == me.Source( userpics.c.uid), #fkey
+                users.c.id == me.Source( userpics.c.uid), #fkey
                 me.Source( userpics.c.state) == "normal"
-            ), source_tbl=userpics, corresp_src_cols= { users.c.id: userpics.c.uid }, out=me.out)
+            ), source_tbl=userpics, out=me.out)
             me.check( expect = '''
 --- users.id = userpics.uid AND userpics.state = :const('normal')
-recalc   >> :BindParam(uid) = userpics.uid AND userpics.state = :const('normal')
-   src_attr ['uid']
+recalc   >> users.id = userpics.uid AND userpics.state = :const('normal')
+   src_attr []
 mapper   >> users.id = :BindParam(uid) AND :BindParam(state) = :const('normal')
    src_attr ['uid', 'state']
 ''')
+#was this, but internal select is correlated to external/target, hence no need to touch movies.id
+#recalc   >> :BindParam(uid) = userpics.uid AND userpics.state = :const('normal')
+#   src_attr ['uid']
 
         def test3_count_posts_before_date( me):
             if 0: print '''
@@ -210,8 +233,8 @@ WHERE stats.c.date >= :blog_date
             stats = Table( 'stats', me.m, Column( 'date1', Date), Column( 'posts_so_far', Integer), )
             blog  = Table( 'blog',  me.m, Column( 'date',  Date), Column( 'text', String), )
             Count( stats.c.posts_so_far,
-                me.Target( stats.c.date1, corresp_src=None) >= me.Source( blog.c.date),
-                source_tbl= blog, corresp_src_cols= { stats.c.date1: None }, out=me.out )
+                stats.c.date1 >= me.Source( blog.c.date),
+                source_tbl= blog, out=me.out )
             me.check( expect = '''
 --- stats.date1 >= blog.date
 recalc   >> stats.date1 >= blog.date
@@ -243,7 +266,7 @@ where srctrans.account like balance.account+'%'
                         trans.c.date  <= select( [ func.max( b.c.finaldate)],
                                                    b.c.finaldate < balance.c.finaldate
                                                ).correlate( balance)
-            ), source_tbl=trans, guess_target_tbl=False, out=me.out )
+            ), source_tbl=trans, out=me.out )
             me.check( expect = '''
 --- trans.account LIKE balance.account || :const('%') AND trans.date <= balance.finaldate AND trans.date <= (SELECT max(b.finaldate)
 FROM balance AS b
@@ -275,7 +298,7 @@ where srctrans.account like balance.account+'%'
                 me.Source( trans.c.account).startswith( balance.c.account),
                 me.Source( trans.c.date) <= balance.c.finaldate,
                         trans.c.date  <= balance.c.startdate
-            ), source_tbl=trans, guess_target_tbl=False, out=me.out )
+            ), source_tbl=trans, out=me.out )
             me.check( expect = '''
 --- trans.account LIKE balance.account || :const('%') AND trans.date <= balance.finaldate AND trans.date <= balance.startdate
 recalc   >> trans.account LIKE balance.account || :const('%') AND trans.date <= balance.finaldate AND trans.date <= balance.startdate
