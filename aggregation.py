@@ -15,7 +15,7 @@ from sqlalchemy.orm import MapperExtension, EXT_CONTINUE
 from sqlalchemy import func, select
 
 _func_if = getattr( func, 'if')
-_func_if_null = func.ifnull
+_func_ifnull = func.ifnull
 _func_max = func.max
 _func_min = func.min
 
