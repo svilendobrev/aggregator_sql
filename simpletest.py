@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, '.')
+sys.path.insert(0, '..')
 if len(sys.argv) > 1 and '://' in sys.argv[1]:
     dburl = sys.argv[1]
     del sys.argv[1]
@@ -8,14 +8,8 @@ else:
 
 import unittest
 import aggregator as a
-from sqlalchemy import (
-    Column, ForeignKey,
-    Integer, String, Numeric,
-    Table, MetaData,
-    )
-from sqlalchemy.orm import (
-    create_session, mapper, relation,
-    )
+from sqlalchemy import *
+from sqlalchemy.orm import create_session, mapper, relation
 
 class SimpleTest(unittest.TestCase):
     def __init__(self, arg):
@@ -30,6 +24,9 @@ class SimpleTest(unittest.TestCase):
             Column('lines', Integer),
             Column('lastline', Integer),
             Column('length', Integer),
+            Column('avg_sum', Integer),
+            Column('avg_cnt', Integer),
+            Column('avg', Float),
             )
         lines = Table('lines', meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
@@ -49,18 +46,26 @@ class SimpleTest(unittest.TestCase):
         mapper(Block, blocks)
         mapper(Line, lines,
             extension=self.aggregator_class(
-                a.Max(blocks.c.lastline, lines.c.id),
-                a.Count(blocks.c.lines),
-                a.Sum(blocks.c.length, lines.c.length),
+                a.Max( blocks.c.lastline, lines.c.id),
+                a.Count( blocks.c.lines),
+                a.Sum( blocks.c.length, lines.c.length),
+                a.Average1( blocks.c.avg, lines.c.length),
+                #a.Average( blocks.c.avg_sum, lines.c.length, blocks.c.avg_cnt),
+                *a.AverageSimple( blocks.c.avg_sum, lines.c.length, blocks.c.avg_cnt)
             ))
 
     def tearDown(self):
         self.lines.drop()
         self.blocks.drop()
-        
+
     def save(self, ob):
         self.session.save(ob)
         self.session.flush()
+
+    def avg( self, b):
+        self.assertEquals( b.avg_sum, b.length)
+        self.assertEquals( b.avg_cnt, b.lines)
+        self.assertEquals( float(b.avg_sum)/b.avg_cnt, b.avg)
 
     def testSimpleCreate(self):
         b = self.Block()
@@ -81,7 +86,8 @@ class SimpleTest(unittest.TestCase):
         self.assertEquals(b.lines, 1)
         self.assertEquals(b.lastline, l.id)
         self.assertEquals(b.length, 10)
-        
+        self.avg(b)
+
     def testAddMoreLines(self):
         b = self.Block()
         b.lines = 0
@@ -95,7 +101,8 @@ class SimpleTest(unittest.TestCase):
         self.session.refresh(b)
         self.assertEquals(b.lastline, l.id)
         self.assertEquals(b.length, 45)
-    
+        self.avg(b)
+
     def testUpdate(self):
         b = self.Block()
         b.lines = 0
@@ -112,11 +119,13 @@ class SimpleTest(unittest.TestCase):
         self.session.refresh(b)
         self.assertEquals(b.lines, 11)
         self.assertEquals(b.length, 60)
+        self.avg(b)
         l.length = 25
         self.save(l)
         self.session.refresh(b)
         self.assertEquals(b.lines, 11)
         self.assertEquals(b.length, 70)
+        self.avg(b)
 
     def testNULL(self):
         b = self.Block()
@@ -128,6 +137,7 @@ class SimpleTest(unittest.TestCase):
         self.session.refresh(b)
         self.assertEquals(b.lines, 1)
         self.assertEquals(b.lastline, l.id)
+        self.avg(b)
 
     def testDeleteLines(self):
         b = self.Block()
@@ -146,6 +156,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEquals(b.lines, 9)
         self.assertNotEquals(b.lastline, l.id)
         self.assertEquals(b.length, 45 - l.length)
+        self.avg(b)
 
     def testUpdateDelete(self):
         b = self.Block()
@@ -166,6 +177,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEquals(b.lines, 9)
         self.assertNotEquals(b.lastline, l.id)
         self.assertEquals(b.length, 45 - oldlen)
+        self.avg(b)
 
     def testDeleteTwice(self):
         b1 = self.Block()
@@ -193,6 +205,8 @@ class SimpleTest(unittest.TestCase):
         self.assertEquals(b2.lines, 9)
         self.assertNotEquals(b1.lastline, last1.id)
         self.assertNotEquals(b2.lastline, last2.id)
+        self.avg(b1)
+        self.avg(b2)
 
     def testMoveLine(self):
         b1 = self.Block()
@@ -249,7 +263,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEquals(b2.length, 36)
         self.assertEquals(b1.lastline, last2.id)
         self.assertNotEquals(b2.lastline, last2.id)
-        
+
 
 class ComplexTest(unittest.TestCase):
     def __init__(self, arg):
@@ -308,7 +322,7 @@ class ComplexTest(unittest.TestCase):
         self.lines.drop()
         self.blocks.drop()
         self.users.drop()
-        
+
     def save(self, ob):
         self.session.save(ob)
         self.session.flush()
@@ -482,7 +496,7 @@ class RelationsTest(unittest.TestCase):
         self.lines.drop()
         self.blocks.drop()
         self.users.drop()
-        
+
     def save(self, ob):
         self.session.save(ob)
         self.session.flush()
@@ -591,7 +605,7 @@ class RelationsTest(unittest.TestCase):
         self.assertEquals(m.blocks, 2)
         self.assertEquals(j.lines, 13)
         self.assertEquals(m.lines, 7)
-        
+
 class TestBigValue(unittest.TestCase):
     def __init__(self, arg):
         self.aggregator_class = a.Quick
@@ -627,7 +641,7 @@ class TestBigValue(unittest.TestCase):
     def tearDown(self):
         self.lines.drop()
         self.blocks.drop()
-        
+
     def save(self, ob):
         self.session.save(ob)
         self.session.flush()
@@ -692,11 +706,11 @@ class TestUpdates(unittest.TestCase):
     def tearDown(self):
         self.lines.drop()
         self.blocks.drop()
-        
+
     def save(self, ob):
         self.session.save(ob)
         self.session.flush()
-    
+
     def testAddValue(self):
         b = self.Block()
         b.lines = 0
@@ -728,7 +742,7 @@ class TestUpdates(unittest.TestCase):
         self.session.refresh(b)
         self.assertEquals(b.minlength, 0)
         self.assertEquals(b.maxlength, 9)
-        
+
 
 class SimpleTest2(SimpleTest):
     def __init__(self, arg):
