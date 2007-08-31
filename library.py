@@ -6,10 +6,13 @@ import operator
 
 class Count( _Agg_1Target_1Source):
     'special case, no real source column needed - just source table, and any column in it'
-    def __init__( self, target):
-        _Aggregation.__init__( self)
-        self.target = target
-    source = property( lambda self: self.key.parent)
+    def __init__( self, target, source =None):
+        _Agg_1Target_1Source.__init__( self, target, source =None)
+#    source = property( lambda self: self.key.parent)
+    def setup_fkey( self, key, grouping_attribute):
+        if self.source is None: self.source = key.parent
+        _Agg_1Target_1Source.setup_fkey( self, key, grouping_attribute)
+
     _sqlfunc = func.count
     def oninsert( self, func_checker, instance):
         return self._target_expr + 1
@@ -96,10 +99,10 @@ class Average( _Aggregation):
         cntname = self.count.target.name
         return property( lambda o: getattr( o, sumname) / getattr( o, cntname))
 
-    def setup( self, key, grouping_attribute):
-        self.sum.setup( key, grouping_attribute)
-        self.count.setup( key, grouping_attribute)
-    table = property( lambda self: self.sum.target.table)
+    def setup_fkey( self, key, grouping_attribute):
+        self.sum.setup_fkey( key, grouping_attribute)
+        self.count.setup_fkey( key, grouping_attribute)
+    target_table = property( lambda self: self.sum.target.table)
 
     def _combined( self, action, *a,**k):
         r = getattr( self.sum, action)( *a,**k)

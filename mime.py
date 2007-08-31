@@ -29,7 +29,7 @@ class _ColumnMarker( object):
     def get_corresponding_attribute( me):
         corresp_attr_name = me.corresp_src_col.name
         #proper way is: look it up in the mapper.properties...
-        return sqlalchemy.bindparam( corresp_attr_name), corresp_attr_name
+        return sqlalchemy.bindparam( corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
 
     #ret_col_inside_mapperext = ..
     def get( me, inside_mapperext, **k):
