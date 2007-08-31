@@ -70,6 +70,9 @@ class Converter( sqlalchemy.sql.util.AbstractClauseProcessor):
         me.source_tbl = source_tbl
         me.src_attrs4mapper = []
     def convert_element( me, e):
+        if getattr( e, 'SourceRecalcOnly', None) and me.inside_mapperext:
+            return sqlalchemy.literal( True)
+
         if isinstance( e, sqlalchemy.Column):
             try:
                 mark = e.mark
@@ -93,7 +96,9 @@ class Converter( sqlalchemy.sql.util.AbstractClauseProcessor):
         expr = c.traverse( expr, clone=True)
         return expr, c.src_attrs4mapper
 
-def SourceRecalcOnly(x): return x
+def SourceRecalcOnly(x):
+    x.SourceRecalcOnly = True
+    return x
 
 if __name__ == '__main__':
     from sqlalchemy import *
