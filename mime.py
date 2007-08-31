@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     #hack for better visibility
     def bp( self,bindparam):
-        return 'BindParam('+(bindparam.value is None and bindparam.key or repr(bindparam.value) )+')'
+        return (bindparam.value is None and 'BindParam('+bindparam.key or 'const('+repr(bindparam.value) )+')'
     from sqlalchemy.sql.compiler import DefaultCompiler
     DefaultCompiler._truncate_bindparam = bp
 
