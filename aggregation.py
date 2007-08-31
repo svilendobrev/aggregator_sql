@@ -1,6 +1,8 @@
 #$Id$
 
-'''80% remade by sdobrev.
+'''
+now 90% remade by svilen_dobrev@sourceforge.net
+
 it was:
 Name: SQLAlchemyAggregator
 Version: 0.1.2.dev-r779
@@ -14,10 +16,7 @@ Author-email: pc@gafol.net
 from sqlalchemy.orm import MapperExtension, EXT_CONTINUE
 from sqlalchemy import func, select
 
-_func_if = getattr( func, 'if')
 _func_ifnull = func.ifnull
-_func_max = func.max
-_func_min = func.min
 
 class _Aggregation( object):
     """Base class for aggregations. Some assumptions:
@@ -79,118 +78,16 @@ class _Agg_1Target_1Source( _Aggregation):
         return select( [self._sqlfunc( self.source)], self._filter_expr( instance, old) )
 
 
-class Count( _Agg_1Target_1Source):
-    'special case, no real source column needed - just source table, and any column in it'
-    def __init__( self, target):
-        _Aggregation.__init__( self)
-        self.target = target
-    source = property( lambda self: self.key.parent)
-    _sqlfunc = func.count
-    def oninsert( self, aggregator, instance):
-        return self._target_expr + 1
-    def ondelete( self, aggregator, instance):
-        return self._target_expr - 1
-    def onupdate( self, aggregator, instance):
-        return ()
-
-
-class Sum( _Agg_1Target_1Source):
-    _sqlfunc = func.sum
-    def oninsert( self, aggregator, instance):
-        return self._target_expr + self.value( instance)
-    def ondelete( self, aggregator, instance):
-        return self._target_expr - self.oldv( instance)
-    def onupdate( self, aggregator, instance):
-        return self._target_expr - self.oldv( instance) + self.value( instance)
-
-import operator
-class Max( _Agg_1Target_1Source):
-    _sqlfunc = func.max
-    _comparator4updins = operator.ge
-    _aggregator4insert = 'max'
-    def oninsert( self, aggregator, instance):
-        return getattr( aggregator, self._aggregator4insert)( self.target, self.value( instance))
-    def onupdate( self, aggregator, instance):
-        if self._comparator4updins( self.value( instance), self.oldv( instance)):
-            return self.oninsert( aggregator, instance)
-        else:
-            return self.onrecalc( aggregator, instance, False)
-    def ondelete( self, aggregator, instance):
-        return self.onrecalc( aggregator, instance, True)
-        #XXX is recalc needed only if curvalue==maxvalue, else nothing ?
-        #e.g. if self.oldv( instance) == current_target_value: then onrecalc()
-
-
-class Min( Max):
-    _sqlfunc = func.min
-    _comparator4updins = operator.le
-    _aggregator4insert = 'min'
-
-
-def AverageSimple( target, source, target_count):
-    return Sum( target, source), Count( target_count)
-
-class Average( _Aggregation):
-    """Average aggregation
-    example of 1-source 2-target aggregation - does not calculate a single value!
-    DIY, maybe a property( lambda self: self.sumname/self.countname ) -
-    see make_property_getter() method.
-
-    Does not do more than adding 2 separate aggregations (AverageSimple),
-    but may save some comparisons. Whether this is worth...
-
-    source - Column object which value will be aggregated
-    target - Column object where to store sum of aggregation
-    target_count - Column object where to store count of aggregation
-
-    This same thing with Accurate mapping-method needs only one column -
-    the average value - and no properties.
-    """
-    def __init__( self, target, source, target_count):
-        self.sum = Sum( target, source)
-        self.count = Count( target_count)
-        assert target.table is target_count.table
-
-    def make_property_getter( self):
-        sumname = self.sum.target.name
-        cntname = self.count.target.name
-        return property( lambda o: getattr( o, sumname) / getattr( o, cntname))
-
-    def setup( self, key, grouping_attribute):
-        self.sum.setup( key, grouping_attribute)
-        self.count.setup( key, grouping_attribute)
-    table = property( lambda self: self.sum.target.table)
-
-    def _combined( self, action, *a,**k):
-        r = getattr( self.sum, action)( *a,**k)
-        r.update( getattr( self.count, action)( *a,**k) )
-        return r
-    def oninsert( self, *a,**k):
-        return self._combined( 'oninsert', *a,**k)
-    def ondelete( self, *a,**k):
-        return self._combined( 'ondelete', *a,**k)
-    def onupdate( self, *a,**k):
-        return self._combined( 'onupdate', *a,**k)
-    def onrecalc( self, *a,**k):
-        return self._combined( 'onrecalc', *a,**k)
-
-class Average1( _Agg_1Target_1Source):
-    """Average aggregation, always accurate = full sqlfunc
-    source - Column object which value will be aggregated
-    target - Column object where to store value of aggregation
-    """
-    _sqlfunc = func.avg
-    oninsert = ondelete = onupdate = _Agg_1Target_1Source.onrecalc
-
 
 ################
 
 class Quick( MapperExtension):
     """Mapper extension which maintains aggregations
 
-    Quick extension does maximum it can without using aggregated queries,
+    Quick does maximum it can without using aggregated queries,
     e.g. `cnt = cnt + 1`  instead of `cnt = (select count(*) from...)`
     see Accurate for those
+
     XXX Quick vs Accurate vs None may have to be switched at runtime ?
     e.g. mass updates may need one Accurate at the end
     """
@@ -198,9 +95,7 @@ class Quick( MapperExtension):
     _delete_method = 'ondelete'
 
     def __init__( self, *aggregations):
-        """
-        *aggregations
-            _Aggregation-subclassed instances, specifying aggregations to maintain for this mapper
+        """ *aggregations - _Aggregation-subclassed instances, to be maintained for this mapper
         """
         groups = {}     #group by target table... does order matter?
         for ag in aggregations:
@@ -268,22 +163,15 @@ class Quick( MapperExtension):
                 self._make_change1( table, fields, instance,  self._insert_method, getattr)
         return EXT_CONTINUE
 
-    def max( self, a, b):
+    def db_supports( self, funcname):
         if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return _func_if( (a == None) | (a < b), b, a)
-        else:
-            return _func_max( _func_ifnull(a,b), b)
+            return funcname not in ('max','min')
+        return True
 
-    def min( self, a, b):
-        if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return _func_if( (a == None) | (a > b), b, a)
-        else:
-            return _func_min( _func_ifnull(a,b), b)
 
 class Accurate( Quick):
     """Mapper extension which maintains aggregations
-
-    Accurate extension does all calculations using aggregated
+    Accurate does all calculations using aggregated
     query at every update of related fields
     """
     _insert_method = 'onrecalc'
