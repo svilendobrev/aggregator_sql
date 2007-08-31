@@ -18,6 +18,7 @@ class SimpleTest(unittest.TestCase):
 
     def setUp(self):
         meta = self.meta = MetaData(bind=dburl)
+        #meta.bind.echo=True
         self.session = create_session()
         blocks = Table('blocks', meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
@@ -219,12 +220,12 @@ class SimpleTest(unittest.TestCase):
             l = self.Line()
             l.length = i
             l.block = b1.id
-            self.session.save(l)
+            self.save(l)
             last1 = l
             l = self.Line()
             l.block = b2.id
             l.length = i
-            self.session.save(l)
+            self.save(l)
             last2 = l
         self.session.flush()
         self.session.refresh(b1)
@@ -385,7 +386,7 @@ class ComplexTest(unittest.TestCase):
             l.author = u.id
             self.session.save(l)
         self.session.flush()
-        l = self.session.query(self.Line).get_by(block = b.id)
+        l = self.session.query(self.Line).filter_by(block = b.id).first() #one() fails??
         self.session.delete(l)
         self.session.flush()
         self.session.refresh(b)
@@ -560,7 +561,7 @@ class RelationsTest(unittest.TestCase):
             l.author = u
             self.session.save(l)
         self.session.flush()
-        l = self.session.query(self.Line).get_by(block = b)
+        l = self.session.query(self.Line).filter_by(block = b).first()  #one() fails??
         self.session.delete(l)
         self.session.flush()
         self.session.refresh(b)
