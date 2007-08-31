@@ -25,11 +25,9 @@ one, which would have correct values.
 Hence no need to replace it with some value, hence no need to mark it at all.
 Hence the default Target( corresp_src_col ) is now None, and target-table guessing
 will mark as Target only if corresp_src_col is specified in the dict.
-
-
-
 '''
-_no_more = '''
+
+_not_needed_anymore = '''
 To avoid some target column being replaced with corresp_src_col, do one of:
     - dont use target_tbl guessing AND dont mark it as Target
     - mark it as Target with corresp_src=None
