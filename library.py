@@ -5,15 +5,24 @@ from sqlalchemy import func
 import operator
 
 class Count( _Agg_1Target_1Source):
-    'special case, no real source column needed - just source table, and any column in it'
-    def __init__( me, target, source =None):
-        _Agg_1Target_1Source.__init__( me, target, source =None)
-#    source = property( lambda me: me.key.parent)
+    """Count aggregation
+
+    Special case, no real source column needed (issues count(*) which matches
+    all corresponding rows. But column can be specified, then it will count
+    non-null values.
+
+    XXX Need support of latter in atomic updates
+    """
+    def __init__( me, target, filter_expr=None, source=None):
+        _Agg_1Target_1Source.__init__( me, target, source=source, filter_expr=filter_expr)
     def setup_fkey( me, key, grouping_attribute):
         if me.source is None: me.source = key.parent
         _Agg_1Target_1Source.setup_fkey( me, key, grouping_attribute)
 
-    _sqlfunc = func.count
+    _sqlfunc_ = func.count
+    def _sqlfunc( me, arg):
+        if not me.source: arg = '*'
+        return me._sqlfunc_( arg)
     def oninsert( me, func_checker, instance):
         return me._target_expr + 1
     def ondelete( me, func_checker, instance):
@@ -70,8 +79,8 @@ class Min( Max):
     _comparator4updins = operator.le
 
 
-def AverageSimple( target, source, target_count):
-    return Sum( target, source), Count( target_count)
+def AverageSimple( target, source, target_count, filter_expr =None):
+    return Sum( target, source, filter_expr=filter_expr), Count( target_count, filter_expr=filter_expr)
 
 class Average( _Aggregation):
     """Average aggregation

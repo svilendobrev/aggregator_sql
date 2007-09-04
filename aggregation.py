@@ -2,15 +2,10 @@
 
 '''
 Name: SQLAlchemyAggregator
-Version: 0.1.2.dev-r779
 Summary: SQLAlchemy's mapper extension which can automatically track changes in
          mapped instances and calculate aggregations based on them
 Home-page: http://www.mr-pc.kiev.ua/en/projects/SQLAlchemyAggregator
-Author: Paul Colomiets
-Author-email: pc@gafol.net
-
-
-now 90% remade by svilen_dobrev@sourceforge.net
+Authors: Paul Colomiets <pc@gafol.net>, Svilen Dobrev <svilen_dobrev@sourceforge.net>
 '''
 
 from sqlalchemy.orm import MapperExtension, EXT_CONTINUE
@@ -82,7 +77,7 @@ class _Agg_1Target_1Source( _Aggregation):
                 res = Converter.apply( filter_expr,
                         inside_mapperext= ismapperext,
                         target_tbl= target.table,
-                        source_tbl= source.table,
+                        source_tbl= source and source.table or None,
                         corresp_src_cols= corresp_src_cols
                     )
                 setattr( me, filterattr_name, res)

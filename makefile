@@ -1,6 +1,6 @@
 #$Id$
 
-now: convert_expr.test simpletest.test
+now: tests/convertertest.test tests/simpletest.test tests/guesstest.test tests/conditiontest.test
 
 PY ?= python
 %.test: %.py

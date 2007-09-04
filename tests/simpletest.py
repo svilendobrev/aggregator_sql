@@ -1,26 +1,15 @@
-import sys
-sys.path.insert(0, '..')
-if len(sys.argv) > 1 and '://' in sys.argv[1]:
-    dburl = sys.argv[1]
-    del sys.argv[1]
-else:
-    dburl = "sqlite:///:memory:"
-
+import testbase
 import unittest
 import aggregator as a
 from sqlalchemy import *
 from sqlalchemy.orm import create_session, mapper, relation
+import sys
 
-class SimpleTest(unittest.TestCase):
-    def __init__(self, arg):
-        self.aggregator_class = a.Quick
-        return super(SimpleTest, self).__init__(arg)
+class SimpleTest(testbase.TestBase):
 
     def setUp(self):
-        meta = self.meta = MetaData(bind=dburl)
-        #meta.bind.echo=True
-        self.session = create_session()
-        blocks = Table('blocks', meta,
+        super(SimpleTest, self).setUp()
+        blocks = Table('blocks', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('lines', Integer),
             Column('lastline', Integer),
@@ -29,7 +18,7 @@ class SimpleTest(unittest.TestCase):
             Column('avg_cnt', Integer),
             Column('avg', Float),
             )
-        lines = Table('lines', meta,
+        lines = Table('lines', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('block', Integer, ForeignKey(blocks.c.id)),
             Column('length', Integer, default=10),
@@ -55,18 +44,10 @@ class SimpleTest(unittest.TestCase):
                 *a.AverageSimple( blocks.c.avg_sum, lines.c.length, blocks.c.avg_cnt)
             ))
 
-    def tearDown(self):
-        self.lines.drop()
-        self.blocks.drop()
-
-    def save(self, ob):
-        self.session.save(ob)
-        self.session.flush()
-
     def avg( self, b):
         self.assertEquals( b.avg_sum, b.length)
         self.assertEquals( b.avg_cnt, b.lines)
-        self.assertEquals( float(b.avg_sum)/b.avg_cnt, b.avg)
+        self.assertAlmostEqual( float(b.avg_sum)/b.avg_cnt, b.avg, 5)
 
     def testSimpleCreate(self):
         b = self.Block()
@@ -220,12 +201,12 @@ class SimpleTest(unittest.TestCase):
             l = self.Line()
             l.length = i
             l.block = b1.id
-            self.save(l)
+            self.session.save(l)
             last1 = l
             l = self.Line()
             l.block = b2.id
             l.length = i
-            self.save(l)
+            self.session.save(l)
             last2 = l
         self.session.flush()
         self.session.refresh(b1)
@@ -266,27 +247,23 @@ class SimpleTest(unittest.TestCase):
         self.assertNotEquals(b2.lastline, last2.id)
 
 
-class ComplexTest(unittest.TestCase):
-    def __init__(self, arg):
-        self.aggregator_class = a.Quick
-        return super(ComplexTest, self).__init__(arg)
+class ComplexTest(testbase.TestBase):
 
     def setUp(self):
-        meta = self.meta = MetaData(bind=dburl)
-        self.session = create_session()
-        users = Table('users', meta,
+        super(ComplexTest, self).setUp()
+        users = Table('users', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('name', String),
             Column('blocks', Integer),
             Column('lines', Integer),
             )
-        blocks = Table('blocks', meta,
+        blocks = Table('blocks', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('author', Integer, ForeignKey(users.c.id)),
             Column('lines', Integer),
             Column('lastline', Integer),
             )
-        lines = Table('lines', meta,
+        lines = Table('lines', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('block', Integer, ForeignKey(blocks.c.id)),
             Column('author', Integer, ForeignKey(users.c.id)),
@@ -318,15 +295,6 @@ class ComplexTest(unittest.TestCase):
                 a.Count(blocks.c.lines),
                 a.Count(users.c.lines),
             ))
-
-    def tearDown(self):
-        self.lines.drop()
-        self.blocks.drop()
-        self.users.drop()
-
-    def save(self, ob):
-        self.session.save(ob)
-        self.session.flush()
 
     def testSimpleCreate(self):
         b = self.Block()
@@ -386,7 +354,7 @@ class ComplexTest(unittest.TestCase):
             l.author = u.id
             self.session.save(l)
         self.session.flush()
-        l = self.session.query(self.Line).filter_by(block = b.id).first() #one() fails??
+        l = self.session.query(self.Line).filter_by(block=b.id).first()
         self.session.delete(l)
         self.session.flush()
         self.session.refresh(b)
@@ -432,27 +400,23 @@ class ComplexTest(unittest.TestCase):
         self.assertEquals(j.lines, 13)
         self.assertEquals(m.lines, 7)
 
-class RelationsTest(unittest.TestCase):
-    def __init__(self, arg):
-        self.aggregator_class = a.Quick
-        return super(RelationsTest, self).__init__(arg)
+class RelationsTest(testbase.TestBase):
 
     def setUp(self):
-        meta = self.meta = MetaData(bind=dburl)
-        self.session = create_session()
-        users = Table('users', meta,
+        super(RelationsTest, self).setUp()
+        users = Table('users', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('name', String),
             Column('blocks', Integer),
             Column('lines', Integer),
             )
-        blocks = Table('blocks', meta,
+        blocks = Table('blocks', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('author', Integer, ForeignKey(users.c.id)),
             Column('lines', Integer),
             Column('lastline', Integer),
             )
-        lines = Table('lines', meta,
+        lines = Table('lines', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('block', Integer, ForeignKey(blocks.c.id)),
             Column('author', Integer, ForeignKey(users.c.id)),
@@ -492,15 +456,6 @@ class RelationsTest(unittest.TestCase):
                 '_block': lines.c.block,
                 'block': relation(Block),
             })
-
-    def tearDown(self):
-        self.lines.drop()
-        self.blocks.drop()
-        self.users.drop()
-
-    def save(self, ob):
-        self.session.save(ob)
-        self.session.flush()
 
     def testSimpleCreate(self):
         b = self.Block()
@@ -561,7 +516,7 @@ class RelationsTest(unittest.TestCase):
             l.author = u
             self.session.save(l)
         self.session.flush()
-        l = self.session.query(self.Line).filter_by(block = b).first()  #one() fails??
+        l = self.session.query(self.Line).filter_by(block=b).first()
         self.session.delete(l)
         self.session.flush()
         self.session.refresh(b)
@@ -607,19 +562,15 @@ class RelationsTest(unittest.TestCase):
         self.assertEquals(j.lines, 13)
         self.assertEquals(m.lines, 7)
 
-class TestBigValue(unittest.TestCase):
-    def __init__(self, arg):
-        self.aggregator_class = a.Quick
-        return super(TestBigValue, self).__init__(arg)
+class TestBigValue(testbase.TestBase):
 
     def setUp(self):
-        meta = self.meta = MetaData(bind=dburl)
-        self.session = create_session()
-        blocks = Table('blocks', meta,
+        super(TestBigValue, self).setUp()
+        blocks = Table('blocks', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('firstline', Numeric(len(str(sys.maxint))+1, 0)),
             )
-        lines = Table('lines', meta,
+        lines = Table('lines', self.meta,
             Column('id', Numeric(len(str(sys.maxint))+1, 0), primary_key=True, autoincrement=True),
             Column('block', Integer, ForeignKey(blocks.c.id)),
             )
@@ -638,14 +589,6 @@ class TestBigValue(unittest.TestCase):
             extension=self.aggregator_class(
                 a.Min(blocks.c.firstline, lines.c.id),
             ))
-
-    def tearDown(self):
-        self.lines.drop()
-        self.blocks.drop()
-
-    def save(self, ob):
-        self.session.save(ob)
-        self.session.flush()
 
     def testBigValue(self):
         b = self.Block()
@@ -669,20 +612,16 @@ class TestBigValue(unittest.TestCase):
         self.session.refresh(b)
         self.assertEquals(b.firstline, -1)
 
-class TestUpdates(unittest.TestCase):
-    def __init__(self, arg):
-        self.aggregator_class = a.Quick
-        return super(TestUpdates, self).__init__(arg)
+class TestUpdates(testbase.TestBase):
 
     def setUp(self):
-        meta = self.meta = MetaData(bind=dburl)
-        self.session = create_session()
-        blocks = Table('blocks', meta,
+        super(TestUpdates, self).setUp()
+        blocks = Table('blocks', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('minlength', Integer),
             Column('maxlength', Integer),
             )
-        lines = Table('lines', meta,
+        lines = Table('lines', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('block', Integer, ForeignKey(blocks.c.id)),
             Column('length', Integer),
@@ -703,14 +642,6 @@ class TestUpdates(unittest.TestCase):
                 a.Min(blocks.c.minlength, lines.c.length),
                 a.Max(blocks.c.maxlength, lines.c.length),
             ))
-
-    def tearDown(self):
-        self.lines.drop()
-        self.blocks.drop()
-
-    def save(self, ob):
-        self.session.save(ob)
-        self.session.flush()
 
     def testAddValue(self):
         b = self.Block()
@@ -744,31 +675,20 @@ class TestUpdates(unittest.TestCase):
         self.assertEquals(b.minlength, 0)
         self.assertEquals(b.maxlength, 9)
 
+class SimpleTest2(SimpleTest, testbase.TestAccurateMixin):
+    pass
 
-class SimpleTest2(SimpleTest):
-    def __init__(self, arg):
-        self.aggregator_class = a.Accurate
-        return unittest.TestCase.__init__(self, arg)
+class ComplexTest2(ComplexTest,testbase.TestAccurateMixin):
+    pass
 
-class ComplexTest2(ComplexTest):
-    def __init__(self, arg):
-        self.aggregator_class = a.Accurate
-        return unittest.TestCase.__init__(self, arg)
+class RelationsTest2(RelationsTest, testbase.TestAccurateMixin):
+    pass
 
-class RelationsTest2(ComplexTest):
-    def __init__(self, arg):
-        self.aggregator_class = a.Accurate
-        return unittest.TestCase.__init__(self, arg)
+class TestBigValue2(TestBigValue, testbase.TestAccurateMixin):
+    pass
 
-class TestBigValue2(TestBigValue):
-    def __init__(self, arg):
-        self.aggregator_class = a.Accurate
-        return unittest.TestCase.__init__(self, arg)
-
-class TestUpdates2(TestUpdates):
-    def __init__(self, arg):
-        self.aggregator_class = a.Accurate
-        return unittest.TestCase.__init__(self, arg)
+class TestUpdates2(TestUpdates, testbase.TestAccurateMixin):
+    pass
 
 if __name__ == '__main__':
     unittest.main()
