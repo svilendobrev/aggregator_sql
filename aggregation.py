@@ -18,6 +18,8 @@ if 0*'test: repeatability and less noise':
     logging.basicConfig( format= format, stream= logging.sys.stdout)
     sqlalchemy.logging.default_enabled= True    #else, default_logging() will setFormatter...
 
+
+
 class _Aggregation( object):
     """Base class for aggregations. Some assumptions:
     - all target columns must be in same table (!)
@@ -43,12 +45,19 @@ public virtual methods/attributes - must be overloaded:
             #either with var-bindparams, or const-bindparams (getattr from instance)
 """
 
-    @staticmethod
-    def _orig( instance, attribute):
-        """Returns original value of instance attribute;
-        Raises KeyError if no original state exists
-        """
-        return instance._sa_attr_state['original'].data[attribute]
+    import sqlalchemy.orm.attributes
+    if hasattr( sqlalchemy.orm.attributes, 'InstanceState'):    #>v3463
+        @staticmethod
+        def _orig( instance, attribute):
+            """Returns original value of instance attribute;
+            Raises KeyError if no original state exists
+            """
+            return instance._state.committed_state[ attribute]
+    else:
+        @staticmethod
+        def _orig( instance, attribute):
+            return instance._sa_attr_state['original'].data[attribute]
+
 
     @staticmethod
     def _get_current_or_orig( instance, attribute, old):
@@ -61,7 +70,6 @@ public virtual methods/attributes - must be overloaded:
         return me.onrecalc( func_checker, instance, True)
 
 ###################
-FKEY_NEW = 1
 
 class _Agg_1Target_1Source( _Aggregation):
     def __init__( me, target, source, filter_expr =None, corresp_src_cols ={}):
@@ -101,9 +109,7 @@ class _Agg_1Target_1Source( _Aggregation):
         if callable( fexpr): fexpr = fexpr( instance, old)
         vbindings = dict( (k,me._get_current_or_orig( instance, k, old)) for k in bindings)
         return fexpr, vbindings
-    #def _get_bindings( me, bindings, instance, old):
-    #    return dict( (k,me._get_current_or_orig( instance, k, old)) for k in bindings)
-    def _same_binding_values( me, bindings, instance):
+    def _is_same_binding_values( me, bindings, instance):
         _orig = me._orig
         for k in bindings:
             if _orig( instance, k) != getattr( instance, k):
@@ -126,19 +132,6 @@ class _Agg_1Target_1Source( _Aggregation):
                 ( grouping_attribute, )
             )
         #the getattr(instance, name, old) part is done in aggregator/mapperext
-
-    if not FKEY_NEW:
-        def setup_fkey( me, key, grouping_attribute):
-            me.grouping_attribute = grouping_attribute
-            me.key = key
-            me._filter4recalc = me._filter4recalc4foreignkey, ()
-            me._filter4mapper = me._filter4mapper4foreignkey, ()
-        def _filter4recalc4foreignkey( me, instance, old):
-            return me.key.parent == me._get_grouping_attribute( instance, old)
-        def _filter4mapper4foreignkey( me, instance, old):
-            return me.key.column == me._get_grouping_attribute( instance, old)
-        def _get_grouping_attribute( me, instance, old):
-            return me._get_current_or_orig( instance, me.grouping_attribute, old)
 
 
 
@@ -246,12 +239,8 @@ class Quick( MapperExtension):
         if not me.off:
             for aggs in me.aggregations.itervalues():
                 ag = aggs[0]    # They all have same table/filters
-                if FKEY_NEW:
-                    bindings = ag._filter4mapper[1]
-                    same = ag._same_binding_values( bindings, instance)
-                else:
-                    grouping_attribute = ag.grouping_attribute
-                    same = getattr( instance, grouping_attribute) == _Aggregation._orig( instance, grouping_attribute)
+                bindings = ag._filter4mapper[1]
+                same = ag._is_same_binding_values( bindings, instance)
 
                 if same:
                     me._make_change1( aggs, instance, 'onupdate')
