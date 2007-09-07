@@ -8,9 +8,15 @@ Home-page: http://www.mr-pc.kiev.ua/en/projects/SQLAlchemyAggregator
 Authors: Paul Colomiets <pc@gafol.net>, Svilen Dobrev <svilen_dobrev@sourceforge.net>
 '''
 
-from sqlalchemy.orm import MapperExtension, EXT_CONTINUE
+from sqlalchemy.orm import MapperExtension
+try:
+    from sqlalchemy.orm import EXT_CONTINUE
+except ImportError:
+    from sqlalchemy.orm import EXT_PASS as EXT_CONTINUE     #SA0.3
+
 from sqlalchemy import func, select, bindparam
 _func_ifnull = func.ifnull
+
 if 0*'test: repeatability and less noise':
     import sqlalchemy, logging
     dict = sqlalchemy.util.OrderedDict

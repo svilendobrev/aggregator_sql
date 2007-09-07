@@ -28,7 +28,10 @@ will mark as Target only if corresp_src_col is specified in the dict.
 '''
 
 import sqlalchemy
-import sqlalchemy.sql.util
+try:
+    from sqlalchemy.sql.util import AbstractClauseProcessor
+except ImportError:
+    from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
 
 class _ColumnMarker( object):
     def __str__(me):
@@ -57,7 +60,7 @@ class _Target( _ColumnMarker):
         me.corresp_src_col = corresp_src
     ret_col_inside_mapperext = True
 
-class Converter( sqlalchemy.sql.util.AbstractClauseProcessor):
+class Converter( AbstractClauseProcessor):
     def __init__( me, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
         me.inside_mapperext = inside_mapperext
         me.target_tbl = target_tbl
@@ -90,7 +93,7 @@ class Converter( sqlalchemy.sql.util.AbstractClauseProcessor):
     @classmethod
     def apply( klas, expr, **k):
         c = klas(**k)
-        expr = c.traverse( expr, clone=True)
+        expr = c.traverse( expr, clone=True)    #sa0.3->copy_container etc..
         return expr, c.src_attrs4mapper
 
 def Source( col, **k):

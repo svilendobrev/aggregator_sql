@@ -4,7 +4,7 @@ now: tests/convertertest.test tests/simpletest.test tests/guesstest.test tests/c
 
 PY ?= python
 %.test: %.py
-	PYTHONPATH=$(PYTHONPATH):..	$(PY) $< $(ARGS)
+	PYTHONPATH=..:../../..:$(PYTHONPATH)	$(PY) $< $(ARGS)
 
 #simpletest.test: ARGS=SimpleTest#.testMoveLine
 

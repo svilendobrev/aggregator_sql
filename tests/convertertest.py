@@ -3,11 +3,16 @@
 import unittest
 from aggregator.convert_expr import *
 from sqlalchemy import MetaData, select, and_, Table, Column, Integer, String, Numeric, Date, func
+try:
+    from sqlalchemy.sql.compiler import DefaultCompiler
+except ImportError:
+    from sqlalchemy.ansisql import ANSICompiler as DefaultCompiler  #SA0.3
 
 class T_mark( unittest.TestCase):
 
     def Count( me, target, expr, source_tbl =None, corresp_src_cols ={} ):
         me.res = res = {}
+        print 'zzzzzz', expr
         for mext in (False,True):
             res[mext] = Converter.apply( expr, inside_mapperext=mext,
                     target_tbl= target.table,
@@ -20,12 +25,10 @@ class T_mark( unittest.TestCase):
         #hack for better visibility
         def bp( me,bindparam):
             return (bindparam.value is None and 'BindParam('+bindparam.key or 'const('+repr(bindparam.value) )+')'
-        from sqlalchemy.sql.compiler import DefaultCompiler
         me.old_bp = DefaultCompiler._truncate_bindparam
         DefaultCompiler._truncate_bindparam = bp
 
     def tearDown( me):
-        from sqlalchemy.sql.compiler import DefaultCompiler
         DefaultCompiler._truncate_bindparam = me.old_bp
 
     Source = staticmethod( Source)
@@ -126,7 +129,8 @@ class T_mark( unittest.TestCase):
         where srctrans.account like balance.account+'%'
         AND srctrans.date <= balance.finaldate
         AND srctrans.date > (SELECT MAX(finaldate) FROM balance as b WHERE b.finaldate < balance.finaldate)
-            #the subselect is to get previous_balance.finaldate. Needs fix if no previous_balance!
+            #the subselect is to get previous_balance.finaldate.
+        Needs fix if no previous_balance!
         '''
         trans  =Table( 'trans',   me.m, Column( 'date', Date),      Column( 'account', String), Column( 'money', Numeric) )
         balance=Table( 'balance', me.m, Column( 'finaldate', Date), Column( 'account', String), Column( 'total', Numeric) )
@@ -134,7 +138,7 @@ class T_mark( unittest.TestCase):
         me.Count( balance.c.total, and_(
             me.Source( trans.c.account).startswith( balance.c.account),
             me.Source( trans.c.date) <= balance.c.finaldate,
-                    trans.c.date  <= select( [ func.max( b.c.finaldate)],
+                        trans.c.date > select( [ func.max( b.c.finaldate)],
                                                b.c.finaldate < balance.c.finaldate
                                            ).correlate( balance)
         ), source_tbl=trans)
@@ -142,14 +146,14 @@ class T_mark( unittest.TestCase):
         me.check( mapper= ('''\
 :BindParam(account) LIKE balance.account || :const('%') \
 AND :BindParam(date) <= balance.finaldate \
-AND :BindParam(date) <= (SELECT max(b.finaldate)
+AND :BindParam(date) >  (SELECT max(b.finaldate)
 FROM balance AS b
 WHERE b.finaldate < balance.finaldate)''',
                           ['account','date']),
                   recalc= ('''\
 trans.account LIKE balance.account || :const('%') \
-AND trans.date <= balance.finaldate AND \
-trans.date <= (SELECT max(b.finaldate)
+AND trans.date <= balance.finaldate \
+AND trans.date >  (SELECT max(b.finaldate)
 FROM balance AS b
 WHERE b.finaldate < balance.finaldate)''',
                           [])
@@ -171,18 +175,18 @@ WHERE b.finaldate < balance.finaldate)''',
         me.Count( balance.c.total, and_(
             me.Source( trans.c.account).startswith( balance.c.account),
             me.Source( trans.c.date) <= balance.c.finaldate,
-                    trans.c.date  <= balance.c.startdate
+                        trans.c.date > balance.c.startdate
         ), source_tbl=trans)
 
         me.check( mapper= ('''\
 :BindParam(account) LIKE balance.account || :const('%') \
 AND :BindParam(date) <= balance.finaldate \
-AND :BindParam(date) <= balance.startdate''',
+AND :BindParam(date) >  balance.startdate''',
                           ['account', 'date']),
                   recalc= ('''\
 trans.account LIKE balance.account || :const('%') \
 AND trans.date <= balance.finaldate \
-AND trans.date <= balance.startdate''',
+AND trans.date >  balance.startdate''',
                           [])
             )
 
