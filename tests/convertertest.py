@@ -5,8 +5,12 @@ from aggregator.convert_expr import *
 from sqlalchemy import MetaData, select, and_, Table, Column, Integer, String, Numeric, Date, func
 try:
     from sqlalchemy.sql.compiler import DefaultCompiler
+    _concat = '||'
+    _v03 = False
 except ImportError:
     from sqlalchemy.ansisql import ANSICompiler as DefaultCompiler  #SA0.3
+    _concat = '+'
+    _v03 = True
 
 class T_mark( unittest.TestCase):
 
@@ -118,7 +122,7 @@ class T_mark( unittest.TestCase):
 
 
     def test4_balance_trans_via_prev_balance_date_subselect( me):
-        '''sum balances of transactions per account/date-range; use prev.balance.date as startdate
+        '''sum balances of transactions per account/date-range; prev.balance.date as startdate
                 testing: source,target-not-replaceable, and, <=, subselect
         update balance set total = (select sum(trans.money)
         where trans.account like balance.account+'%'
@@ -137,26 +141,30 @@ class T_mark( unittest.TestCase):
         me.Count( balance.c.total, and_(
             me.Source( trans.c.account).startswith( balance.c.account),
             me.Source( trans.c.date) <= balance.c.finaldate,
-                        trans.c.date > select( [ func.max( b.c.finaldate)],
+                        trans.c.date > func.coalesce(
+                                        select( [ func.max( b.c.finaldate)],
                                                b.c.finaldate < balance.c.finaldate
                                            ).correlate( balance)
+                                        ,0 )
         ), source_tbl=trans)
 
         me.check( mapper= ('''\
-:BindParam(account) LIKE balance.account || :const('%') \
+:BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
 AND :BindParam(date) <= balance.finaldate \
-AND :BindParam(date) >  (SELECT max(b.finaldate)
+AND :BindParam(date) > coalesce((SELECT max(b.finaldate)
 FROM balance AS b
-WHERE b.finaldate < balance.finaldate)''',
+WHERE b.finaldate < balance.finaldate), :const(0))''',
                           ['account','date']),
                   recalc= ('''\
-trans.account LIKE balance.account || :const('%') \
+trans.account LIKE balance.account '''+_concat+''' :const('%') \
 AND trans.date <= balance.finaldate \
-AND trans.date >  (SELECT max(b.finaldate)
+AND trans.date > coalesce((SELECT max(b.finaldate)
 FROM balance AS b
-WHERE b.finaldate < balance.finaldate)''',
+WHERE b.finaldate < balance.finaldate), :const(0))''',
                           [])
             )
+    if _v03:
+        del test4_balance_trans_via_prev_balance_date_subselect
 
     def test5_balance_trans_via_prev_balance_date_subselect( me):
         '''sum balances of transactions per account/date-range; with separate startdate
@@ -178,14 +186,14 @@ WHERE b.finaldate < balance.finaldate)''',
         ), source_tbl=trans)
 
         me.check( mapper= ('''\
-:BindParam(account) LIKE balance.account || :const('%') \
+:BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
 AND :BindParam(date) <= balance.finaldate \
-AND :BindParam(date) >  balance.startdate''',
+AND :BindParam(date) > balance.startdate''',
                           ['account', 'date']),
                   recalc= ('''\
-trans.account LIKE balance.account || :const('%') \
+trans.account LIKE balance.account '''+_concat+''' :const('%') \
 AND trans.date <= balance.finaldate \
-AND trans.date >  balance.startdate''',
+AND trans.date > balance.startdate''',
                           [])
             )
 

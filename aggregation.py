@@ -11,8 +11,10 @@ Authors: Paul Colomiets <pc@gafol.net>, Svilen Dobrev <svilen_dobrev@sourceforge
 from sqlalchemy.orm import MapperExtension
 try:
     from sqlalchemy.orm import EXT_CONTINUE
+    _v03 = False
 except ImportError:
     from sqlalchemy.orm import EXT_PASS as EXT_CONTINUE     #SA0.3
+    _v03 = True
 
 from sqlalchemy import func, select, bindparam
 _func_ifnull = func.ifnull
@@ -62,7 +64,7 @@ public virtual methods/attributes - must be overloaded:
     else:
         @staticmethod
         def _orig( instance, attribute):
-            return instance._sa_attr_state['original'].data[attribute]
+            return instance._sa_attr_state[ 'original'].data[ attribute]
 
 
     @staticmethod
@@ -167,7 +169,7 @@ class Quick( MapperExtension):
             assert isinstance( ag, _Aggregation)
             groups.setdefault( ag.target_table, [] ).append( ag)
 
-    def instrument_class( self, mapper, class_):
+    def _setup( self, mapper, class_):
         self.local_table = table = mapper.local_table
         self.aggregations = groups = dict()     #combined by table,filter
         for (target_table, aggs) in self.aggregations_by_table.iteritems():
@@ -180,6 +182,9 @@ class Quick( MapperExtension):
                     groups.setdefault( (target_table, a._filter_expr), [] ).append( a)
                 #here re-combined by target_table+filter
                 #later, for ags on same key, only ags[0]._filter* is used
+
+    def instrument_class( self, mapper, class_):
+        self._setup( mapper, class_)
         return super( Quick, self).instrument_class( mapper, class_)
 
     def find_fkey( self, table, target_table, mapper):
@@ -260,6 +265,21 @@ class Quick( MapperExtension):
         if self.local_table.metadata.bind.url.drivername == 'mysql':
             return funcname not in ('max','min')
         return True
+
+    if _v03:    #no instrument_class(), hook on first after_xxx()
+        def _after( self, mapper, connection, instance, name):
+            self._setup( mapper, mapper.class_)
+            old = getattr( self, 'old_'+name)
+            #once only per instance - suicide
+            setattr( self, name, old)
+            return old( mapper, connection, instance)
+
+        old_after_insert = after_insert
+        old_after_update = after_update
+        old_after_delete = after_delete
+        def after_insert( self, *a,**k): return self._after( name='after_insert', *a,**k )
+        def after_update( self, *a,**k): return self._after( name='after_update', *a,**k )
+        def after_delete( self, *a,**k): return self._after( name='after_delete', *a,**k )
 
 
 class Accurate( Quick):

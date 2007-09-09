@@ -30,8 +30,13 @@ will mark as Target only if corresp_src_col is specified in the dict.
 import sqlalchemy
 try:
     from sqlalchemy.sql.util import AbstractClauseProcessor
+    _v03 = False
+    _bindparam = sqlalchemy.bindparam
 except ImportError:
     from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
+    _v03 = True
+    def _bindparam( *a, **kargs):
+        return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
 
 class _ColumnMarker( object):
     def __str__(me):
@@ -39,7 +44,7 @@ class _ColumnMarker( object):
     def get_corresponding_attribute( me):
         corresp_attr_name = me.corresp_src_col.name
         #proper way is: look it up in the mapper.properties...
-        return sqlalchemy.bindparam( corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
+        return _bindparam( corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
 
     #ret_col_inside_mapperext = ..
     def get( me, inside_mapperext, **k):
@@ -47,11 +52,9 @@ class _ColumnMarker( object):
             return me.col, None
         return me.get_corresponding_attribute( **k)
 
-
 class _Source( _ColumnMarker):
     def __init__( me, col):
-        me.col = col
-    corresp_src_col = property( lambda me: me.col)
+        me.col = me.corresp_src_col = col
     ret_col_inside_mapperext = False
 
 class _Target( _ColumnMarker):
@@ -59,6 +62,7 @@ class _Target( _ColumnMarker):
         me.col = col
         me.corresp_src_col = corresp_src
     ret_col_inside_mapperext = True
+
 
 class Converter( AbstractClauseProcessor):
     def __init__( me, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
@@ -88,13 +92,33 @@ class Converter( AbstractClauseProcessor):
                 if src_attrs4mapper and src_attrs4mapper not in me.src_attrs4mapper:
                     me.src_attrs4mapper.append( src_attrs4mapper)
                 return col
+
         return None
 
     @classmethod
     def apply( klas, expr, **k):
         c = klas(**k)
-        expr = c.traverse( expr, clone=True)    #sa0.3->copy_container etc..
+        expr = c.traverse( expr, clone=True)
         return expr, c.src_attrs4mapper
+
+if _v03:
+    def _copymarkers( self, *a,**k):
+        newobj = self.old_copy_container(*a,**k)
+        for a in 'mark SourceRecalcOnly'.split():
+            m = getattr( self, a, None)
+            if m is not None: setattr( newobj, a, m)
+        return newobj
+    for _klas in [ sqlalchemy.sql._UnaryExpression, sqlalchemy.sql._BinaryExpression,]:
+        cc = _klas.old_copy_container = _klas.copy_container
+        _klas.copy_container = _copymarkers
+
+    _Converter = Converter
+    class Converter( _Converter):
+        @classmethod
+        def apply( klas, expr, **k):
+            c = klas(**k)
+            expr = c.traverse( expr.copy_container() )    #sa0.3->copy_container etc..
+            return expr, c.src_attrs4mapper
 
 def Source( col, **k):
     col.mark = _Source( col,**k)
