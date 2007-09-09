@@ -138,14 +138,16 @@ class T_mark( unittest.TestCase):
         trans  =Table( 'trans',   me.m, Column( 'date', Date),      Column( 'account', String), Column( 'money', Numeric) )
         balance=Table( 'balance', me.m, Column( 'finaldate', Date), Column( 'account', String), Column( 'total', Numeric) )
         b = balance.alias('b')
+        sprev = select( [ func.max( b.c.finaldate)],
+                    b.c.finaldate < balance.c.finaldate
+                )
+        q = sprev.correlate( balance)   #non-generative in 0.3, hence separated
+        if not _v03: sprev = q          #but generative in 0.4, hence overwrite
+
         me.Count( balance.c.total, and_(
             me.Source( trans.c.account).startswith( balance.c.account),
             me.Source( trans.c.date) <= balance.c.finaldate,
-                        trans.c.date > func.coalesce(
-                                        select( [ func.max( b.c.finaldate)],
-                                               b.c.finaldate < balance.c.finaldate
-                                           ).correlate( balance)
-                                        ,0 )
+                        trans.c.date > func.coalesce( sprev,0 )
         ), source_tbl=trans)
 
         me.check( mapper= ('''\
@@ -163,8 +165,6 @@ FROM balance AS b
 WHERE b.finaldate < balance.finaldate), :const(0))''',
                           [])
             )
-    if _v03:
-        del test4_balance_trans_via_prev_balance_date_subselect
 
     def test5_balance_trans_via_prev_balance_date_subselect( me):
         '''sum balances of transactions per account/date-range; with separate startdate
