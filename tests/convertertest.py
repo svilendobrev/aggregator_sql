@@ -12,7 +12,6 @@ class T_mark( unittest.TestCase):
 
     def Count( me, target, expr, source_tbl =None, corresp_src_cols ={} ):
         me.res = res = {}
-        print 'zzzzzz', expr
         for mext in (False,True):
             res[mext] = Converter.apply( expr, inside_mapperext=mext,
                     target_tbl= target.table,
