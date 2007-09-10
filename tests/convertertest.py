@@ -6,11 +6,9 @@ from sqlalchemy import MetaData, select, and_, Table, Column, Integer, String, N
 try:
     from sqlalchemy.sql.compiler import DefaultCompiler
     _concat = '||'
-    _v03 = False
 except ImportError:
     from sqlalchemy.ansisql import ANSICompiler as DefaultCompiler  #SA0.3
     _concat = '+'
-    _v03 = True
 
 class T_mark( unittest.TestCase):
 
@@ -141,8 +139,8 @@ class T_mark( unittest.TestCase):
         sprev = select( [ func.max( b.c.finaldate)],
                     b.c.finaldate < balance.c.finaldate
                 )
-        q = sprev.correlate( balance)   #non-generative in 0.3, hence separated
-        if not _v03: sprev = q          #but generative in 0.4, hence overwrite
+        #correlate is non-generative in 0.3 (ret None) but generative in 0.4
+        sprev = sprev.correlate( balance) or sprev
 
         me.Count( balance.c.total, and_(
             me.Source( trans.c.account).startswith( balance.c.account),
