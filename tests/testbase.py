@@ -25,7 +25,7 @@ class TestBase(unittest.TestCase):
                 v.drop()
 
     def save(self, ob):
-        self.session.save(ob)
+        self.session.save_or_update(ob)
         self.session.flush()
 
 class TestAccurateMixin(unittest.TestCase):
