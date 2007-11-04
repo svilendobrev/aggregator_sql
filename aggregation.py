@@ -17,7 +17,7 @@ except ImportError:
     _v03 = True
 
 from sqlalchemy import func, select, bindparam
-_func_ifnull = func.ifnull
+_func_ifnull = func.ifnull  #XXX no such thing as ifnull XXX - use coalesce, case, whatever
 
 if 0*'test: repeatability and less noise':
     import sqlalchemy, logging
@@ -31,7 +31,7 @@ if 0*'test: repeatability and less noise':
 class _Aggregation( object):
     """Base class for aggregations. Some assumptions:
     - all target columns must be in same table (!)
-    - event-methods (see below - oninsert etc) has this interface/rules for return result:
+    - event-methods (see below - oninsert etc) have this interface/rules for return result:
       -- () for no change
       -- tuple (result, bindings-dict), result is then checked wih next rules
       -- a dict of target-column names/values
@@ -44,13 +44,10 @@ public virtual methods/attributes - must be overloaded:
     def ondelete( self, func_checker, instance):
     def onupdate( self, func_checker, instance):
     def onrecalc( self, func_checker, instance, old =False):
-     func_checker( funcname) will return True if the func is supported by db
 
-    _filter_expr = None
-    def filter_expr( self, instance, old):
-        raise NotImplementedError
-        return filter_condition
-            #either with var-bindparams, or const-bindparams (getattr from instance)
+    func_checker( funcname) will return True if the func is supported by db
+
+    filter_expr = ... #either with var-bindparams, or const-bindparams (getattr from instance)
 """
 
     import sqlalchemy.orm.attributes
@@ -87,20 +84,19 @@ class _Agg_1Target_1Source( _Aggregation):
         """
         self.target = target
         self.source = source
-        if filter_expr:
+        self.filter_expr = filter_expr #also used for comparison when combining with other aggregations
+        self.corresp_src_cols = corresp_src_cols
+
+    def _initialize( self, mapper):
+        if self.filter_expr:
             from convert_expr import Converter
-            for filterattr_name, ismapperext in dict( _filter4recalc=False, _filter4mapper=True).iteritems():
-                res = Converter.apply( filter_expr,
-                        inside_mapperext= ismapperext,
-                        target_tbl= target.table,
-                        source_tbl= source and source.table or None,
-                        corresp_src_cols= corresp_src_cols
+            kargs = dict( expr= self.filter_expr,
+                        target_tbl= self.target.table,
+                        source_tbl= self.source and self.source.table or mapper.local_table #None,
+                        corresp_src_cols= self.corresp_src_cols
                     )
-                setattr( self, filterattr_name, res)
-
-            #used for comparison when combining with other aggregations
-            self._filter_expr = filter_expr
-
+            self._filter4recalc = Converter.apply( inside_mapperext= False, **kargs)
+            self._filter4mapper = Converter.apply( inside_mapperext= True, **kargs)
 
     target_table = property( lambda self: self.target.table)
 
@@ -109,7 +105,7 @@ class _Agg_1Target_1Source( _Aggregation):
     def value( self, instance): return getattr( instance, self.source.name)
     def oldv(  self, instance): return self._orig( instance, self.source.name)
 
-    _filter_expr = None
+    filter_expr = None
     _filter4recalc = None
     _filter4mapper = None
     def get_filter_and_bindings( self, (fexpr,bindings), instance, old):
@@ -174,12 +170,13 @@ class Quick( MapperExtension):
         self.aggregations = groups = dict()     #combined by table,filter
         for (target_table, aggs) in self.aggregations_by_table.iteritems():
             for a in aggs:
-                if a._filter_expr is None:
+                a._initialize( self)
+                if a.filter_expr is None:
                     fkey, src_attribute = self.find_fkey( table, target_table, mapper)
                     a.setup_fkey( fkey, src_attribute)
-                    groups.setdefault( (target_table, fkey), [] ).append( a)    #not a._filter_expr
+                    groups.setdefault( (target_table, fkey), [] ).append( a)    #not a.filter_expr
                 else:
-                    groups.setdefault( (target_table, a._filter_expr), [] ).append( a)
+                    groups.setdefault( (target_table, a.filter_expr), [] ).append( a)
                 #here re-combined by target_table+filter
                 #later, for ags on same key, only ags[0]._filter* is used
 
