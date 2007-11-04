@@ -92,8 +92,8 @@ class _Agg_1Target_1Source( _Aggregation):
             from convert_expr import Converter
             kargs = dict( expr= self.filter_expr,
                         target_tbl= self.target.table,
-                        source_tbl= self.source and self.source.table or mapper.local_table #None,
-                        corresp_src_cols= self.corresp_src_cols
+                        source_tbl= self.source and self.source.table or mapper.local_table, #None,
+                        corresp_src_cols= self.corresp_src_cols,
                     )
             self._filter4recalc = Converter.apply( inside_mapperext= False, **kargs)
             self._filter4mapper = Converter.apply( inside_mapperext= True, **kargs)
