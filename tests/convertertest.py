@@ -1,6 +1,7 @@
 #$Id$
 
 import unittest
+import testbase
 from aggregator.convert_expr import *
 from sqlalchemy import MetaData, select, and_, Table, Column, Integer, String, Numeric, Date, func
 try:
