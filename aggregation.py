@@ -140,6 +140,26 @@ class _Agg_1Target_1Source( _Aggregation):
 
 
 ################
+import sqlalchemy.orm
+def props_iter( mapr, klas =sqlalchemy.orm.PropertyLoader ):
+    try: i = mapr.properties
+    except:     # about r3740
+        for p in mapr.iterate_properties:
+            if isinstance( p, klas):
+                print 'YYYYY', p.key, p
+                yield p.key, p
+    else:
+        for k,p in i.iteritems():
+            print 'XXXXXX', k, p
+            yield k,p
+
+def props_get( mapr, key):
+    try:
+        return mapr.properties[ key]
+    except KeyError: raise
+    except:     # about r3700
+        return mapr.get_property( key)
+
 
 class Quick( MapperExtension):
     """Mapper extension which maintains aggregations.
@@ -192,17 +212,17 @@ class Quick( MapperExtension):
         else:
             raise NotImplementedError( "No foreign key defined for pair %s %s" % (table, target_table))
 
+        grouping_attribute = k.parent.name
         try:
-            if mapper.properties[ k.parent.name] != k.parent:
+            if props_get( mapper, k.parent.name) != k.parent:
                 # Field is aliased somewhere
-                for (attrname, column) in mapper.properties.iteritems():
+                for attrname, column in props_iter( mapper, sqlalchemy.orm.ColumnProperty ):
                     if column is k.parent: # "==" works not as expected
                         grouping_attribute = attrname
                         break
                 else:
                     raise NotImplementedError( "Can't find property %s" % k.parent.name)
-        except KeyError:
-            grouping_attribute = k.parent.name
+        except KeyError: pass
 
         return k, grouping_attribute
 
