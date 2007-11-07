@@ -150,11 +150,11 @@ def props_iter( mapr, klas =None ):
     except:     # about r3740
         for p in mapr.iterate_properties:
             if not klas or isinstance( p, klas):
-                print 'YYYYY', p.key, p
+#                print 'YYYYY', p.key, p
                 yield p.key, p
     else:
         for k,p in i.iteritems():
-            print 'XXXXXX', k, p
+#            print 'XXXXXX', k, p
             yield k,p
 
 def props_get( mapr, key):
@@ -223,7 +223,7 @@ class Quick( MapperExtension):
                 for attrname, column in props_iter( mapper):
                     if column is k.parent: # "==" works not as expected
                         grouping_attribute = attrname
-                        print ' OOOOOOOOPA', grouping_attribute, k.parent.name
+#                        print ' OOOOOOOOPA', grouping_attribute, k.parent.name
                         break
                 else:
                     raise NotImplementedError( "Can't find property %s" % k.parent.name)

@@ -41,42 +41,42 @@ except ImportError:
 _pfx = 'agcnv_'    #needed to distinguish SA.bindparams and our own bindparams
 
 class _ColumnMarker( object):
-    def __str__(me):
-        return me.__class__.__name__+'#' + me.col.table.name+'.'+me.col.name
-    def get_corresponding_attribute( me):
-        corresp_attr_name = me.corresp_src_col.name
+    def __str__(self):
+        return self.__class__.__name__+'#' + self.col.table.name+'.'+self.col.name
+    def get_corresponding_attribute( self):
+        corresp_attr_name = self.corresp_src_col.name
         #proper way is: look it up in the mapper.properties...
-        return _bindparam( _pfx+corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
+        return _bindparam( _pfx+corresp_attr_name, type_= self.corresp_src_col.type), corresp_attr_name
 
     #ret_col_inside_mapperext = ..
-    def get( me, inside_mapperext, **k):
-        if me.ret_col_inside_mapperext == inside_mapperext or me.corresp_src_col is None:
-            return me.col, None
-        return me.get_corresponding_attribute( **k)
+    def get( self, inside_mapperext, **k):
+        if self.ret_col_inside_mapperext == inside_mapperext or self.corresp_src_col is None:
+            return self.col, None
+        return self.get_corresponding_attribute( **k)
 
 class _Source( _ColumnMarker):
-    def __init__( me, col):
-        me.col = me.corresp_src_col = col
+    def __init__( self, col):
+        self.col = self.corresp_src_col = col
     ret_col_inside_mapperext = False
 
 class _Target( _ColumnMarker):
-    def __init__( me, col, corresp_src =None):
-        me.col = col
-        me.corresp_src_col = corresp_src
+    def __init__( self, col, corresp_src =None):
+        self.col = col
+        self.corresp_src_col = corresp_src
     ret_col_inside_mapperext = True
 
 
 class Converter( AbstractClauseProcessor):
     _pfx = _pfx
-    def __init__( me, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
-        me.inside_mapperext = inside_mapperext
-        me.target_tbl = target_tbl
-        me.source_tbl = source_tbl
-        me.src_attrs4mapper = []
-        me.corresp_src_cols = corresp_src_cols
+    def __init__( self, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
+        self.inside_mapperext = inside_mapperext
+        self.target_tbl = target_tbl
+        self.source_tbl = source_tbl
+        self.src_attrs4mapper = []
+        self.corresp_src_cols = corresp_src_cols
 
-    def convert_element( me, e):
-        if getattr( e, 'SourceRecalcOnly', None) and me.inside_mapperext:
+    def convert_element( self, e):
+        if getattr( e, 'SourceRecalcOnly', None) and self.inside_mapperext:
             return sqlalchemy.literal( True)
 
         if isinstance( e, sqlalchemy.Column):
@@ -84,16 +84,16 @@ class Converter( AbstractClauseProcessor):
                 mark = e.mark
             except:
                 mark = None
-                if me.target_tbl and e.table == me.target_tbl:
-                    corresp_src= me.corresp_src_cols.get( e, None)
+                if self.target_tbl and e.table == self.target_tbl:
+                    corresp_src= self.corresp_src_cols.get( e, None)
                     if corresp_src: mark = _Target( e, corresp_src)
-                elif me.source_tbl and e.table == me.source_tbl:
+                elif self.source_tbl and e.table == self.source_tbl:
                     mark = _Source( e)
             if mark:
                 assert isinstance( mark, _ColumnMarker)
-                col,src_attrs4mapper = mark.get( me.inside_mapperext)
-                if src_attrs4mapper and src_attrs4mapper not in me.src_attrs4mapper:
-                    me.src_attrs4mapper.append( src_attrs4mapper)
+                col,src_attrs4mapper = mark.get( self.inside_mapperext)
+                if src_attrs4mapper and src_attrs4mapper not in self.src_attrs4mapper:
+                    self.src_attrs4mapper.append( src_attrs4mapper)
                 return col
 
         return None
