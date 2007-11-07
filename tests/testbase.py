@@ -15,6 +15,11 @@ class TestBase(unittest.TestCase):
         self.aggregator_class = a.Quick
         return super(TestBase, self).__init__(arg)
 
+    class EasyInit(object):
+        def __init__(self, **kwargs):
+            for k,v in kwargs.iteritems():
+                setattr( self, k, v)
+
     def setUp(self):
         meta = self.meta = MetaData(bind=dburl)
         self.session = create_session()
@@ -23,10 +28,16 @@ class TestBase(unittest.TestCase):
         for v in self.__dict__.values():
             if type(v) is Table:
                 v.drop()
+        self.session.close()
 
-    def save(self, ob):
-        self.session.save_or_update(ob)
+    def save(self, *objs):
+        for ob in objs:
+            self.session.save_or_update(ob)
         self.session.flush()
+
+    def refresh(self, *objs):
+        for ob in objs:
+            self.session.refresh(ob)
 
 class TestAccurateMixin(unittest.TestCase):
     def __init__(self, arg):

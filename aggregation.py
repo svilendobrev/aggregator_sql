@@ -16,8 +16,12 @@ except ImportError:
     from sqlalchemy.orm import EXT_PASS as EXT_CONTINUE     #SA0.3
     _v03 = True
 
-from sqlalchemy import func, select, bindparam
-_func_ifnull = func.ifnull  #XXX no such thing as ifnull XXX - use coalesce, case, whatever
+
+#XXX no such thing as ifnull XXX - use coalesce, case, whatever
+from sqlalchemy import func, select, bindparam, case
+_func_ifnull = func.coalesce
+#_func_ifnull = func.ifnull
+#def _func_ifnull( a,b): return case( [(a==None, b)],else_=a)
 
 if 0*'test: repeatability and less noise':
     import sqlalchemy, logging
@@ -75,6 +79,7 @@ public virtual methods/attributes - must be overloaded:
         return self.onrecalc( func_checker, instance, True)
 
 ###################
+from convert_expr import Converter
 
 class _Agg_1Target_1Source( _Aggregation):
     def __init__( self, target, source, filter_expr =None, corresp_src_cols ={}):
@@ -89,7 +94,6 @@ class _Agg_1Target_1Source( _Aggregation):
 
     def _initialize( self, mapper):
         if self.filter_expr:
-            from convert_expr import Converter
             kargs = dict( expr= self.filter_expr,
                         target_tbl= self.target.table,
                         source_tbl= self.source and self.source.table or mapper.local_table, #None,
@@ -113,7 +117,7 @@ class _Agg_1Target_1Source( _Aggregation):
         if callable( fexpr): fexpr = fexpr( instance, old)
         vbindings = dict( (k,self._get_current_or_orig( instance, k, old)) for k in bindings)
         return fexpr, vbindings
-    def _is_same_binding_values( self, bindings, instance):
+    def _same_binding_values( self, bindings, instance):
         _orig = self._orig
         for k in bindings:
             if _orig( instance, k) != getattr( instance, k):
@@ -128,11 +132,11 @@ class _Agg_1Target_1Source( _Aggregation):
     def setup_fkey( self, key, grouping_attribute):
         'used as fallback if no other filters are setup'
         self._filter4recalc = (
-                (key.parent == bindparam( grouping_attribute)),
+                (key.parent == bindparam( Converter._pfx+ grouping_attribute)),
                 ( grouping_attribute, )
             )
         self._filter4mapper = (
-                (key.column == bindparam( grouping_attribute)),
+                (key.column == bindparam( Converter._pfx+ grouping_attribute)),
                 ( grouping_attribute, )
             )
         #the getattr(instance, name, old) part is done in aggregator/mapperext
@@ -141,11 +145,11 @@ class _Agg_1Target_1Source( _Aggregation):
 
 ################
 import sqlalchemy.orm
-def props_iter( mapr, klas =sqlalchemy.orm.PropertyLoader ):
+def props_iter( mapr, klas =None ):
     try: i = mapr.properties
     except:     # about r3740
         for p in mapr.iterate_properties:
-            if isinstance( p, klas):
+            if not klas or isinstance( p, klas):
                 print 'YYYYY', p.key, p
                 yield p.key, p
     else:
@@ -157,7 +161,7 @@ def props_get( mapr, key):
     try:
         return mapr.properties[ key]
     except KeyError: raise
-    except:     # about r3700
+    except:     # about r3740
         return mapr.get_property( key)
 
 
@@ -216,9 +220,10 @@ class Quick( MapperExtension):
         try:
             if props_get( mapper, k.parent.name) != k.parent:
                 # Field is aliased somewhere
-                for attrname, column in props_iter( mapper, sqlalchemy.orm.ColumnProperty ):
+                for attrname, column in props_iter( mapper):
                     if column is k.parent: # "==" works not as expected
                         grouping_attribute = attrname
+                        print ' OOOOOOOOPA', grouping_attribute, k.parent.name
                         break
                 else:
                     raise NotImplementedError( "Can't find property %s" % k.parent.name)
@@ -252,6 +257,12 @@ class Quick( MapperExtension):
             ag = aggs[0]    # They all have same table/filters
             fexpr,vbindings = ag.get_filter_and_bindings( ag._filter4mapper, instance, old)
             bindings.update( vbindings)
+            if Converter._pfx:
+                bindings = dict( (Converter._pfx+k,v) for k,v in bindings.items() )
+            if 0:
+                print 'UUUUUUUU'
+                for k,v in updates.items(): print k,v
+                print bindings
             ag.target_table.update( fexpr, values=updates ).execute( **bindings)
 
     def after_insert( self, mapper, connection, instance):
@@ -268,7 +279,7 @@ class Quick( MapperExtension):
             for aggs in self.aggregations.itervalues():
                 ag = aggs[0]    # They all have same table/filters
                 bindings = ag._filter4mapper[1]
-                same = ag._is_same_binding_values( bindings, instance)
+                same = ag._same_binding_values( bindings, instance)
 
                 if same:
                     self._make_change1( aggs, instance, 'onupdate')

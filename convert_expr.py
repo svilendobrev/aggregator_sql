@@ -38,13 +38,15 @@ except ImportError:
     def _bindparam( *a, **kargs):
         return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
 
+_pfx = 'agcnv_'    #needed to distinguish SA.bindparams and our own bindparams
+
 class _ColumnMarker( object):
     def __str__(me):
         return me.__class__.__name__+'#' + me.col.table.name+'.'+me.col.name
     def get_corresponding_attribute( me):
         corresp_attr_name = me.corresp_src_col.name
         #proper way is: look it up in the mapper.properties...
-        return _bindparam( corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
+        return _bindparam( _pfx+corresp_attr_name, type_= me.corresp_src_col.type), corresp_attr_name
 
     #ret_col_inside_mapperext = ..
     def get( me, inside_mapperext, **k):
@@ -65,6 +67,7 @@ class _Target( _ColumnMarker):
 
 
 class Converter( AbstractClauseProcessor):
+    _pfx = _pfx
     def __init__( me, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
         me.inside_mapperext = inside_mapperext
         me.target_tbl = target_tbl
