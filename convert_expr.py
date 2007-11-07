@@ -75,11 +75,16 @@ class Converter( AbstractClauseProcessor):
         self.src_attrs4mapper = []
         self.corresp_src_cols = corresp_src_cols
 
+    mark_only = False
     def convert_element( self, e):
+#        print e
         if getattr( e, 'SourceRecalcOnly', None) and self.inside_mapperext:
+#            print ' > SourceRecalcOnly'
+            if self.mark_only: return None      #>=r3727 anything replaced stops traversing inside that thing
             return sqlalchemy.literal( True)
 
         if isinstance( e, sqlalchemy.Column):
+#            print ' > Column', e
             try:
                 mark = e.mark
             except:
@@ -94,13 +99,20 @@ class Converter( AbstractClauseProcessor):
                 col,src_attrs4mapper = mark.get( self.inside_mapperext)
                 if src_attrs4mapper and src_attrs4mapper not in self.src_attrs4mapper:
                     self.src_attrs4mapper.append( src_attrs4mapper)
-                return col
+                if not self.mark_only:
+                    return col
 
         return None
 
     @classmethod
     def apply( klas, expr, **k):
         c = klas(**k)
+
+            #>=r3727 anything replaced stops traversing inside that (original) thing
+        c.mark_only = True
+        c.traverse( expr, clone=True)
+
+        c.mark_only = False
         expr = c.traverse( expr, clone=True)
         return expr, c.src_attrs4mapper
 
