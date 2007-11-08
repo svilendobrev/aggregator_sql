@@ -107,11 +107,9 @@ class Converter( AbstractClauseProcessor):
     @classmethod
     def apply( klas, expr, **k):
         c = klas(**k)
-
-            #>=r3727 anything replaced stops traversing inside that (original) thing
-        c.mark_only = True
-        c.traverse( expr, clone=True)
-
+        if 1:   #>=r3727 anything replaced stops traversing inside that (original) thing
+            c.mark_only = True
+            c.traverse( expr, clone=True)
         c.mark_only = False
         expr = c.traverse( expr, clone=True)
         return expr, c.src_attrs4mapper

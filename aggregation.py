@@ -92,11 +92,11 @@ class _Agg_1Target_1Source( _Aggregation):
         self.filter_expr = filter_expr #also used for comparison when combining with other aggregations
         self.corresp_src_cols = corresp_src_cols
 
-    def _initialize( self, mapper):
+    def _initialize( self, default_table =None):
         if self.filter_expr:
             kargs = dict( expr= self.filter_expr,
                         target_tbl= self.target.table,
-                        source_tbl= self.source and self.source.table or mapper.local_table, #None,
+                        source_tbl= self.source and self.source.table or default_table, #None,
                         corresp_src_cols= self.corresp_src_cols,
                     )
             self._filter4recalc = Converter.apply( inside_mapperext= False, **kargs)
@@ -145,25 +145,6 @@ class _Agg_1Target_1Source( _Aggregation):
 
 ################
 import sqlalchemy.orm
-def props_iter( mapr, klas =None ):
-    try: i = mapr.properties
-    except:     # about r3740
-        for p in mapr.iterate_properties:
-            if not klas or isinstance( p, klas):
-#                print 'YYYYY', p.key, p
-                yield p.key, p
-    else:
-        for k,p in i.iteritems():
-#            print 'XXXXXX', k, p
-            yield k,p
-
-def props_get( mapr, key):
-    try:
-        return mapr.properties[ key]
-    except KeyError: raise
-    except:     # about r3740
-        return mapr.get_property( key)
-
 
 class Quick( MapperExtension):
     """Mapper extension which maintains aggregations.
@@ -178,7 +159,7 @@ class Quick( MapperExtension):
     _insert_method = 'oninsert'
     _delete_method = 'ondelete'
 
-    def __init__( self, *aggregations):
+    def __init__( self, *aggregations, **kargs):
         """ *aggregations - _Aggregation-subclass instances, to be maintained for this mapper
         """
         self.off = False
@@ -189,12 +170,18 @@ class Quick( MapperExtension):
             assert isinstance( ag, _Aggregation)
             groups.setdefault( ag.target_table, [] ).append( ag)
 
-    def _setup( self, mapper, class_):
+        mapper = kargs.get( 'mapper')
+        if mapper:  #autohook and setup
+            self._setup( mapper)
+            if not mapper.extensions or self not in mapper.extensions:
+                mapper.extensions.append( self)
+
+    def _setup( self, mapper):
         self.local_table = table = mapper.local_table
         self.aggregations = groups = dict()     #combined by table,filter
         for (target_table, aggs) in self.aggregations_by_table.iteritems():
             for a in aggs:
-                a._initialize( self)
+                a._initialize( table)
                 if a.filter_expr is None:
                     fkey, src_attribute = self.find_fkey( table, target_table, mapper)
                     a.setup_fkey( fkey, src_attribute)
@@ -203,10 +190,8 @@ class Quick( MapperExtension):
                     groups.setdefault( (target_table, a.filter_expr), [] ).append( a)
                 #here re-combined by target_table+filter
                 #later, for ags on same key, only ags[0]._filter* is used
-
-    def instrument_class( self, mapper, class_):
-        self._setup( mapper, class_)
-        return super( Quick, self).instrument_class( mapper, class_)
+        #suicide
+        self._setup = lambda *a,**k: None
 
     def find_fkey( self, table, target_table, mapper):
         for k in table.foreign_keys:
@@ -216,20 +201,18 @@ class Quick( MapperExtension):
         else:
             raise NotImplementedError( "No foreign key defined for pair %s %s" % (table, target_table))
 
-        grouping_attribute = k.parent.name
-        try:
-            if props_get( mapper, k.parent.name) != k.parent:
-                # Field is aliased somewhere
-                for attrname, column in props_iter( mapper):
-                    if column is k.parent: # "==" works not as expected
-                        grouping_attribute = attrname
-#                        print ' OOOOOOOOPA', grouping_attribute, k.parent.name
-                        break
-                else:
-                    raise NotImplementedError( "Can't find property %s" % k.parent.name)
-        except KeyError: pass
+        #print 'LLLook for ', k.parent, k.parent.name
+        grouping_attribute = None
+        # Field maybe aliased somewhere
+        for propcol in mapper.iterate_properties:
+            if isinstance( propcol, sqlalchemy.orm.ColumnProperty):
+                if propcol.columns[0] is k.parent:     # "==" works not as expected
+                    grouping_attribute = propcol.key
+                    return k, grouping_attribute
 
-        return k, grouping_attribute
+        colname = k.parent.name
+        raise RuntimeError( "Can't find property for %(colname)r / foreignkey %(k)r" % locals() )
+
 
     def _make_updates( self, instance, action):
         if not self.off:
@@ -265,16 +248,21 @@ class Quick( MapperExtension):
                 print bindings
             ag.target_table.update( fexpr, values=updates ).execute( **bindings)
 
+    def _db_supports( self, funcname):
+        'called back by aggregation-calculators'
+        if self.local_table.metadata.bind.url.drivername == 'mysql':
+            return funcname not in ('max','min')
+        return True
+
+    #mapperExtension protocol - these are called after the instance is ins/upd/del-eted
     def after_insert( self, mapper, connection, instance):
-        """called after an object instance has been INSERTed"""
+        self._setup( mapper)
         return self._make_updates( instance, self._insert_method)
-
     def after_delete( self, mapper, connection, instance):
-        """called after an object instance is DELETEed"""
+        self._setup( mapper)
         return self._make_updates( instance, self._delete_method)
-
     def after_update( self, mapper, connection, instance):
-        """called after an object instance is UPDATEed"""
+        self._setup( mapper)
         if not self.off:
             for aggs in self.aggregations.itervalues():
                 ag = aggs[0]    # They all have same table/filters
@@ -287,27 +275,6 @@ class Quick( MapperExtension):
                     self._make_change1( aggs, instance,  self._delete_method, old=True)
                     self._make_change1( aggs, instance,  self._insert_method)
         return EXT_CONTINUE
-
-    def _db_supports( self, funcname):
-        'called back by aggregation-calculators'
-        if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return funcname not in ('max','min')
-        return True
-
-    if _v03:    #no instrument_class(), hook on first after_xxx()
-        def _after( self, mapper, connection, instance, name):
-            self._setup( mapper, mapper.class_)
-            old = getattr( self, 'old_'+name)
-            #once only per instance - suicide
-            setattr( self, name, old)
-            return old( mapper, connection, instance)
-
-        old_after_insert = after_insert
-        old_after_update = after_update
-        old_after_delete = after_delete
-        def after_insert( self, *a,**k): return self._after( name='after_insert', *a,**k )
-        def after_update( self, *a,**k): return self._after( name='after_update', *a,**k )
-        def after_delete( self, *a,**k): return self._after( name='after_delete', *a,**k )
 
 
 class Accurate( Quick):
