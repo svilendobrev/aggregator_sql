@@ -16,6 +16,7 @@ except ImportError:
     from sqlalchemy.orm import EXT_PASS as EXT_CONTINUE     #SA0.3
     _v03 = True
 
+import sqlalchemy.orm.attributes
 
 #XXX no such thing as ifnull XXX - use coalesce, case, whatever
 from sqlalchemy import func, select, bindparam, case
@@ -54,7 +55,6 @@ public virtual methods/attributes - must be overloaded:
     filter_expr = ... #either with var-bindparams, or const-bindparams (getattr from instance)
 """
 
-    import sqlalchemy.orm.attributes
     if hasattr( sqlalchemy.orm.attributes, 'InstanceState'):    #>v3463
         @staticmethod
         def _orig( instance, attribute):
@@ -84,9 +84,14 @@ from convert_expr import Converter
 class _Agg_1Target_1Source( _Aggregation):
     def __init__( self, target, source, filter_expr =None, corresp_src_cols ={}):
         """aggregation of single source-column into single target-column
-        target - Column object where to store value of aggregation
-        source - Column object which value will be aggregated
+        target - column where to store value of aggregation
+        source - column which value will be aggregated
+        both columns can be either sql.Column()s or respective class.instrumentedAttribute
         """
+        if isinstance( source, sqlalchemy.orm.attributes.InstrumentedAttribute):
+            source = source.property.columns[0]
+        if isinstance( target, sqlalchemy.orm.attributes.InstrumentedAttribute):
+            target = target.property.columns[0]
         self.target = target
         self.source = source
         self.filter_expr = filter_expr #also used for comparison when combining with other aggregations
