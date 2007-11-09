@@ -170,8 +170,10 @@ class Quick( MapperExtension):
             assert isinstance( ag, _Aggregation)
             groups.setdefault( ag.target_table, [] ).append( ag)
 
-        mapper = kargs.get( 'mapper')
+        mapper = kargs.get( 'mapper') or kargs.get( 'class_')
         if mapper:  #autohook and setup
+            if not isinstance( mapper, sqlalchemy.orm.Mapper):
+                mapper = sqlalchemy.orm.class_mapper( mapper)
             self._setup( mapper)
             if not mapper.extension or self not in mapper.extension:
                 mapper.extension.append( self)
