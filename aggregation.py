@@ -2,7 +2,7 @@
 
 '''
 Name: SQLAlchemyAggregator
-Summary: SQLAlchemy's mapper extension which can automatically track changes in
+Summary: SQLAlchemy's mapper xtension which can automatically track changes in
          mapped instances and calculate aggregations based on them
 Home-page: http://www.mr-pc.kiev.ua/en/projects/SQLAlchemyAggregator
 Authors: Paul Colomiets <pc@gafol.net>, Svilen Dobrev <svilen_dobrev@sourceforge.net>
@@ -173,8 +173,8 @@ class Quick( MapperExtension):
         mapper = kargs.get( 'mapper')
         if mapper:  #autohook and setup
             self._setup( mapper)
-            if not mapper.extensions or self not in mapper.extensions:
-                mapper.extensions.append( self)
+            if not mapper.extension or self not in mapper.extension:
+                mapper.extension.append( self)
 
     def _setup( self, mapper):
         self.local_table = table = mapper.local_table
