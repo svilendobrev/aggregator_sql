@@ -168,7 +168,7 @@ WHERE b.finaldate < balance.finaldate), :const(0))''',
                           [])
             )
 
-    def test5_balance_trans_via_prev_balance_date_subselect( self):
+    def test5_balance_trans_via_prev_balance_date_separate( self):
         '''sum balances of transactions per account/date-range; with separate startdate
                 testing: source,target-not-replaceable, and, <=
         update balance set total = (select sum(trans.money)
