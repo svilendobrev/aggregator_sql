@@ -17,6 +17,7 @@ except ImportError:
     _v03 = True
 
 import sqlalchemy.orm.attributes
+import warnings
 
 #XXX no such thing as ifnull XXX - use coalesce, case, whatever
 from sqlalchemy import func, select, bindparam, case
@@ -170,7 +171,7 @@ class Quick( MapperExtension):
         self.off = False
         self.aggregations_by_table = groups = dict()
 
-        #here combined by target table
+        #here combined by target table, then target column
         for ag in aggregations:
             assert isinstance( ag, _Aggregation)
             groups.setdefault( ag.target_table, [] ).append( ag)
@@ -187,6 +188,7 @@ class Quick( MapperExtension):
         self.local_table = table = mapper.local_table
         self.aggregations = groups = dict()     #combined by table,filter
         for (target_table, aggs) in self.aggregations_by_table.iteritems():
+            used_columns = set()
             for a in aggs:
                 a._initialize( table)
                 if a.filter_expr is None:
@@ -197,6 +199,14 @@ class Quick( MapperExtension):
                     groups.setdefault( (target_table, a.filter_expr), [] ).append( a)
                 #here re-combined by target_table+filter
                 #later, for ags on same key, only ags[0]._filter* is used
+                target = a.target
+                if target in used_columns:
+                    warnings.warn( 'Aggregator: target column', target, 'has more than one aggregator; full recalc will be wrong'
+                    # XXX this case may need another sub-classification, by target table.column;
+                    # as having >1 agg on same column, onrecalc must somehow bundle them all
+                    # into one super-select / single update. This may not be 100% automatic,
+                    # the way of bundling should be pre-specified - is it a+b or a/b or..
+                used_columns.add( target)
         #suicide
         self._setup = lambda *a,**k: None
 
@@ -273,6 +283,7 @@ class Quick( MapperExtension):
         if not self.off:
             for aggs in self.aggregations.itervalues():
                 ag = aggs[0]    # They all have same table/filters
+                #XXX BUT there will be conflict onrecalc if same column in several ag's
                 bindings = ag._filter4mapper[1]
                 same = ag._same_binding_values( bindings, instance)
 
