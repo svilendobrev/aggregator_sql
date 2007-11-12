@@ -201,7 +201,7 @@ class Quick( MapperExtension):
                 #later, for ags on same key, only ags[0]._filter* is used
                 target = a.target
                 if target in used_columns:
-                    warnings.warn( 'Aggregator: target column', target, 'has more than one aggregator; full recalc will be wrong'
+                    warnings.warn( Warning( 'Aggregator: target column '+ str(target) + ' has more than one aggregator; full recalc will be wrong' ))
                     # XXX this case may need another sub-classification, by target table.column;
                     # as having >1 agg on same column, onrecalc must somehow bundle them all
                     # into one super-select / single update. This may not be 100% automatic,
