@@ -235,7 +235,6 @@ class Quick( MapperExtension):
         if not self.off:
             for aggs in self.aggregations.itervalues():
                 self._make_change1( aggs, instance, action)
-        return EXT_CONTINUE
 
     def _make_change1( self, aggs, instance, action, old =False):
         updates = dict()
@@ -243,7 +242,6 @@ class Quick( MapperExtension):
         func_checker = self._db_supports
         for a in aggs:
             u = getattr( a, action)( func_checker, instance)
-
             if u is (): continue
             if isinstance( u,tuple) and len(u)==2 and isinstance( u[1],dict):
                 expr,vbindings = u
@@ -274,10 +272,12 @@ class Quick( MapperExtension):
     #mapperExtension protocol - these are called after the instance is ins/upd/del-eted
     def after_insert( self, mapper, connection, instance):
         self._setup( mapper)
-        return self._make_updates( instance, self._insert_method)
+        self._make_updates( instance, self._insert_method)
+        return self._after_all( mapper, connection, instance)
     def after_delete( self, mapper, connection, instance):
         self._setup( mapper)
-        return self._make_updates( instance, self._delete_method)
+        self._make_updates( instance, self._delete_method)
+        return self._after_all( mapper, connection, instance)
     def after_update( self, mapper, connection, instance):
         self._setup( mapper)
         if not self.off:
@@ -292,8 +292,14 @@ class Quick( MapperExtension):
                 else:
                     self._make_change1( aggs, instance,  self._delete_method, old=True)
                     self._make_change1( aggs, instance,  self._insert_method)
-        return EXT_CONTINUE
+        return self._after_all( mapper, connection, instance)
 
+    def _after_all( self, mapper, connection, instance):
+        if 0:
+            for name in self.auto_expire_refs:
+                g = getattr( instance, name, None)
+                if g is not None: session.expire( g)
+        return EXT_CONTINUE
 
 class Accurate( Quick):
     """Mapper extension which maintains aggregations.
