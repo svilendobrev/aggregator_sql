@@ -109,8 +109,12 @@ class _Agg_1Target_1Source( _Aggregation):
             self._filter4mapper = Converter.apply( inside_mapperext= True, **kargs)
 
     target_table = property( lambda self: self.target.table)
-
-    _target_expr = property( lambda self: _func_ifnull( self.target, 0) )
+    if _v03:
+        _target_expr = property(
+            lambda self: _func_ifnull( self.target, 0, type= self.target.type ) )
+    else:
+        _target_expr = property(
+            lambda self: _func_ifnull( self.target, 0, type_= self.target.type ) )
 
     def value( self, instance): return getattr( instance, self.source.name)
     def oldv(  self, instance): return self._orig( instance, self.source.name)
@@ -301,7 +305,10 @@ class Quick( MapperExtension):
             session = sqlalchemy.orm.object_session( instance)
             for name in self.auto_expire_refs:
                 g = getattr( instance, name, None)
-                if g is not None: session.expire( g)
+                if g is not None:
+                    print 'EXPIRING', type(g), g.db_id, g.kolichestvo
+                    session.expire( g)
+                    #session.refresh( g)
         return EXT_CONTINUE
 
 class Accurate( Quick):
