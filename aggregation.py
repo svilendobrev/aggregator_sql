@@ -188,6 +188,9 @@ class Quick( MapperExtension):
             if not mapper.extension or self not in mapper.extension:
                 mapper.extension.append( self)
 
+        self.auto_expire_refs = kargs.get( 'auto_expire_refs', () )
+
+
     def _setup( self, mapper):
         self.local_table = table = mapper.local_table
         self.aggregations = groups = dict()     #combined by table,filter
@@ -306,7 +309,7 @@ class Quick( MapperExtension):
             for name in self.auto_expire_refs:
                 g = getattr( instance, name, None)
                 if g is not None:
-                    print 'EXPIRING', type(g), g.db_id, g.kolichestvo
+                    #print 'EXPIRING', type(g), id(g)
                     session.expire( g)
                     #session.refresh( g)
         return EXT_CONTINUE
