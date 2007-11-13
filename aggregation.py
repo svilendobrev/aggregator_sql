@@ -231,12 +231,12 @@ class Quick( MapperExtension):
         raise RuntimeError( "Can't find property for %(colname)r / foreignkey %(k)r" % locals() )
 
 
-    def _make_updates( self, instance, action):
+    def _make_updates( self, instance, connection, action):
         if not self.off:
             for aggs in self.aggregations.itervalues():
-                self._make_change1( aggs, instance, action)
+                self._make_change1( aggs, instance, connection, action)
 
-    def _make_change1( self, aggs, instance, action, old =False):
+    def _make_change1( self, aggs, instance, connection, action, old =False):
         updates = dict()
         bindings = dict()
         func_checker = self._db_supports
@@ -261,7 +261,8 @@ class Quick( MapperExtension):
                 print 'UUUUUUUU'
                 for k,v in updates.items(): print k,v
                 print bindings
-            ag.target_table.update( fexpr, values=updates ).execute( **bindings)
+#            ag.target_table.update( fexpr, values=updates ).execute( **bindings)   #own transaction+commit
+            connection.execute( ag.target_table.update( fexpr, values=updates ), **bindings)    #part of overall transaction
 
     def _db_supports( self, funcname):
         'called back by aggregation-calculators'
@@ -272,11 +273,11 @@ class Quick( MapperExtension):
     #mapperExtension protocol - these are called after the instance is ins/upd/del-eted
     def after_insert( self, mapper, connection, instance):
         self._setup( mapper)
-        self._make_updates( instance, self._insert_method)
+        self._make_updates( instance, connection, self._insert_method)
         return self._after_all( mapper, connection, instance)
     def after_delete( self, mapper, connection, instance):
         self._setup( mapper)
-        self._make_updates( instance, self._delete_method)
+        self._make_updates( instance, connection, self._delete_method)
         return self._after_all( mapper, connection, instance)
     def after_update( self, mapper, connection, instance):
         self._setup( mapper)
@@ -288,14 +289,16 @@ class Quick( MapperExtension):
                 same = ag._same_binding_values( bindings, instance)
 
                 if same:
-                    self._make_change1( aggs, instance, 'onupdate')
+                    self._make_change1( aggs, instance, connection, 'onupdate')
                 else:
-                    self._make_change1( aggs, instance,  self._delete_method, old=True)
-                    self._make_change1( aggs, instance,  self._insert_method)
+                    self._make_change1( aggs, instance, connection,  self._delete_method, old=True)
+                    self._make_change1( aggs, instance, connection,  self._insert_method)
         return self._after_all( mapper, connection, instance)
 
+    auto_expire_refs = ()
     def _after_all( self, mapper, connection, instance):
-        if 0:
+        if 10:
+            session = sqlalchemy.orm.object_session( instance)
             for name in self.auto_expire_refs:
                 g = getattr( instance, name, None)
                 if g is not None: session.expire( g)
