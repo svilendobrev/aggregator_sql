@@ -21,11 +21,39 @@ import warnings
 
 #XXX no such thing as ifnull XXX - use coalesce, case, whatever
 from sqlalchemy import func, select, bindparam, case
-_func_ifnull = func.coalesce
-#_func_ifnull = func.ifnull
-#def _func_ifnull( a,b): return case( [(a==None, b)],else_=a)
 
-if 0*'test: repeatability and less noise':
+def _func_type( f, *args, **kargs):
+    type = kargs.pop( 'type', None) or kargs.pop( 'type_', None)
+    if _v03: return f( type=type, *args, **kargs)
+    return f( type_=type, *args, **kargs)
+
+class Func( object):
+    def __init__( me, name, replacement_expr):
+        me.name = name
+        me.default_func = getattr( func, name)
+        me.replacement_expr = replacement_expr
+    def translate( me, func_checker):
+        fname = func_checker( me.name)
+        if not fname: return me.replacement_expr
+        if fname == me.name: return me.default_func
+        return getattr( func, fname)
+    def __call__( me, *args, **kargs):
+        #print me.name, args, kargs
+        func_checker = kargs.pop( 'func_checker', None )
+        f = me.translate( func_checker)
+        return _func_type( f, *args, **kargs)
+
+if 10:
+    _func_ifnull = Func( name= 'coalesce',   #ifnull is not that common
+                     replacement_expr= lambda a,b, **kignore: case( [(a==None, b)], else_=a)
+                )
+else:
+    __func_ifnull = func.coalesce
+    def _func_ifnull( *a, **k): return _func_type( __func_ifnull, *a, **k)
+
+
+_test_fix_echo_repeatability = False
+if _test_fix_echo_repeatability:
     import sqlalchemy, logging
     dict = sqlalchemy.util.OrderedDict
     format ='* SA: %(levelname)s %(message)s'
@@ -109,12 +137,8 @@ class _Agg_1Target_1Source( _Aggregation):
             self._filter4mapper = Converter.apply( inside_mapperext= True, **kargs)
 
     target_table = property( lambda self: self.target.table)
-    if _v03:
-        _target_expr = property(
-            lambda self: _func_ifnull( self.target, 0, type= self.target.type ) )
-    else:
-        _target_expr = property(
-            lambda self: _func_ifnull( self.target, 0, type_= self.target.type ) )
+    def target_or_0( self, func_checker):
+        return _func_ifnull( self.target, 0, type= self.target.type, func_checker= func_checker)
 
     def value( self, instance): return getattr( instance, self.source.name)
     def oldv(  self, instance): return self._orig( instance, self.source.name)
@@ -134,10 +158,18 @@ class _Agg_1Target_1Source( _Aggregation):
                 return False
         return True
 
-    _sqlfunc = None     #do overload
+    #_sqlfunc4column = func.somefunctor                 #do overload
+    def sqlfunc4column( self, arg):
+        'used in recalc over whole column; do overload'
+        return self._sqlfunc4column( arg)
+    #_sqlfunc4args = func.somefunctor                   #do overload
+    def sqlfunc4args( self, column, value, **kargs):    #func_checker, type
+        'used in atomic updates over new and old values; do overload'
+        return self._sqlfunc4args( column, value, **kargs)
+
     def onrecalc( self, func_checker, instance, old =False):
         fexpr,vbindings = self.get_filter_and_bindings( self._filter4recalc, instance, old)
-        return select( [self._sqlfunc( self.source) ], fexpr ), vbindings
+        return select( [self.sqlfunc4column( self.source) ], fexpr ), vbindings
 
     def setup_fkey( self, key, grouping_attribute):
         'used as fallback if no other filters are setup'
@@ -150,6 +182,8 @@ class _Agg_1Target_1Source( _Aggregation):
                 ( grouping_attribute, )
             )
         #the getattr(instance, name, old) part is done in aggregator/mapperext
+
+
 
 
 
@@ -246,7 +280,7 @@ class Quick( MapperExtension):
     def _make_change1( self, aggs, instance, connection, action, old =False):
         updates = dict()
         bindings = dict()
-        func_checker = self._db_supports
+        func_checker = self._db_func_translator
         for a in aggs:
             u = getattr( a, action)( func_checker, instance)
             if u is (): continue
@@ -271,11 +305,27 @@ class Quick( MapperExtension):
 #            ag.target_table.update( fexpr, values=updates ).execute( **bindings)   #own transaction+commit
             connection.execute( ag.target_table.update( fexpr, values=updates ), **bindings)    #part of overall transaction
 
-    def _db_supports( self, funcname):
-        'called back by aggregation-calculators'
-        if self.local_table.metadata.bind.url.drivername == 'mysql':
-            return funcname not in ('max','min')
-        return True
+    _funcs4db_replacement = dict(
+        mysql= dict(
+            min= 'least',       #use None if no such func
+            max= 'greatest',    #funcs not in here are considered available
+        ),
+        sqlite  = {
+            #'if' : None,
+        },
+        postgres= {
+            'if' : None,
+            'min': 'least',       #use None if no such func
+            'max': 'greatest',    #funcs not in here are considered available
+        },
+    )
+    def _db_func_translator( self, funcname):
+        'called by aggregation-calculators'
+        db_drv = self.local_table.metadata.bind.url.drivername
+        frepl = self._funcs4db_replacement.get( db_drv)
+        if frepl:
+            return frepl.get( funcname, funcname)
+        return funcname
 
     #mapperExtension protocol - these are called after the instance is ins/upd/del-eted
     def after_insert( self, mapper, connection, instance):

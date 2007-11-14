@@ -5,6 +5,10 @@ if len(sys.argv) > 1 and '://' in sys.argv[1]:
 else:
     dburl = "sqlite:///:memory:"
 
+try: sys.argv.remove( 'echo')
+except: echo = False
+else:   echo = True
+
 import unittest
 from sqlalchemy import Table, MetaData
 from sqlalchemy.orm import create_session
@@ -22,6 +26,7 @@ class TestBase(unittest.TestCase):
 
     def setUp(self):
         meta = self.meta = MetaData(bind=dburl)
+        meta.bind.echo = echo
         self.session = create_session()
 
     def tearDown(self):

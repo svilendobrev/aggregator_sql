@@ -1,6 +1,6 @@
 #$Id$
 
-from aggregation import _Aggregation, _Agg_1Target_1Source, _func_ifnull
+from aggregation import _Aggregation, _Agg_1Target_1Source, Func, _func_ifnull, case
 from sqlalchemy import func
 import operator
 
@@ -19,63 +19,69 @@ class Count( _Agg_1Target_1Source):
         if self.source is None: self.source = key.parent
         _Agg_1Target_1Source.setup_fkey( self, key, grouping_attribute)
 
-    _sqlfunc_ = func.count
-    def _sqlfunc( self, arg):
+    _sqlfunc4column = func.count
+    def sqlfunc4column( self, arg):
         if not self.source: arg = '*'
-        return self._sqlfunc_( arg)
+        return self._sqlfunc4column( arg)
     def oninsert( self, func_checker, instance):
-        return self._target_expr + 1
+        return self.target_or_0( func_checker) + 1
     def ondelete( self, func_checker, instance):
-        return self._target_expr - 1
+        return self.target_or_0( func_checker) - 1
     def onupdate( self, func_checker, instance):
         return ()
 
 
 class Sum( _Agg_1Target_1Source):
-    _sqlfunc = func.sum
+    _sqlfunc4column = func.sum
     def oninsert( self, func_checker, instance):
-        return self._target_expr + self.value( instance)
+        return self.target_or_0( func_checker) + self.value( instance)
     def ondelete( self, func_checker, instance):
-        return self._target_expr - self.oldv( instance)
+        return self.target_or_0( func_checker) - self.oldv( instance)
     def onupdate( self, func_checker, instance):
-        return self._target_expr - self.oldv( instance) + self.value( instance)
+        return self.target_or_0( func_checker) - self.oldv( instance) + self.value( instance)
 
-_func_if = getattr( func, 'if')
+_func_if = Func( name= 'if',
+                 replacement_expr= lambda a,b,c, **kignore: case( [(a, b)], else_=c)
+            )
 
 class Max( _Agg_1Target_1Source):
-    _sqlfunc_name = 'max'
-    _sqlfunc = func.max
-    @staticmethod
-    def _substitute_func( a,b):
-        return _func_if( (a == None) | (a < b), b, a)
+    _sqlfunc4column = func.max
+
+    def _func_as_expr( a,b, **kargs):
+        return _func_if( (a == None) | (a < b), b, a, **kargs)
+        #return _func_if( (a == None) | (b != None) & (a < b), b, a, **kargs)
+
+    _sqlfunc4args = Func( 'max', _func_as_expr)
+    def sqlfunc4args( self, column, value, **kargs):
+        'must be max(ifnull(a,b),ifnull(b,a)) but assume value is never None'
+        assert value is not None
+        return _Agg_1Target_1Source.sqlfunc4args( self,
+            _func_ifnull( column, value, **kargs),
+            value, #_func_ifnull( column, value, **kargs),
+            **kargs)
+
     _comparator4updins = operator.ge
-
-    def _agg_func( self, func_checker, a, b):
-        if func_checker( self._sqlfunc_name):
-            return self._sqlfunc( _func_ifnull(a,b), b)
-        else:
-            return self._substitute_func( a,b)
-
     def oninsert( self, func_checker, instance):
-        return self._agg_func( func_checker, self.target, self.value( instance))
+        return self.sqlfunc4args( self.target, self.value( instance),
+                        func_checker= func_checker,
+                        type= self.target.type )
     def onupdate( self, func_checker, instance):
         if self._comparator4updins( self.value( instance), self.oldv( instance)):
             return self.oninsert( func_checker, instance)
-        else:
-            return self.onrecalc( func_checker, instance, False)
+        return self.onrecalc( func_checker, instance, old=False)
     def ondelete( self, func_checker, instance):
-        return self.onrecalc( func_checker, instance, True)
+        return self.onrecalc( func_checker, instance, old=True)
         #XXX is recalc needed only if curvalue==maxvalue, else nothing ?
         #e.g. if self.oldv( instance) == current_target_value: then onrecalc()
         #but no way to gt current_target_value...
 
 
 class Min( Max):
-    _sqlfunc_name = 'min'
-    _sqlfunc = func.min
-    @staticmethod
-    def _substitute_func( a,b):
-        return _func_if( (a == None) | (a > b), b, a)
+    _sqlfunc4column = func.min
+    def _func_as_expr( a,b, **kargs):
+        return _func_if( (a == None) | (a > b), b, a, **kargs)
+        #return _func_if( (a == None) | (b != None) & (a > b), b, a, **kargs)
+    _sqlfunc4args = Func( 'min', _func_as_expr)
     _comparator4updins = operator.le
 
 
@@ -131,7 +137,7 @@ class Average1( _Agg_1Target_1Source):
     source - Column object which value will be aggregated
     target - Column object where to store value of aggregation
     """
-    _sqlfunc = func.avg
+    _sqlfunc4column = func.avg
     oninsert = ondelete = onupdate = _Agg_1Target_1Source.onrecalc
 
 # vim:ts=4:sw=4:expandtab
