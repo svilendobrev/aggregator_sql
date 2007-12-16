@@ -84,13 +84,28 @@ public virtual methods/attributes - must be overloaded:
     filter_expr = ... #either with var-bindparams, or const-bindparams (getattr from instance)
 """
 
+
     if hasattr( sqlalchemy.orm.attributes, 'InstanceState'):    #>v3463
-        @staticmethod
-        def _orig( instance, attribute):
-            """Returns original value of instance attribute;
-            Raises KeyError if no original state exists
-            """
-            return instance._state.committed_state[ attribute]
+        if hasattr( sqlalchemy.orm.attributes, 'AttributeHistory'):    #<v3935
+            @staticmethod
+            def _orig( instance, attribute):
+                """Returns original value of instance attribute;
+                Raises KeyError if no original state exists
+                """
+                return instance._state.committed_state[ attribute]
+        else:
+            @staticmethod
+            def _orig( instance, attribute):
+                """Returns original value of instance attribute;
+                Raises KeyError if no original state exists
+                """
+                #print 'zzzzzzzzzzzzzzzzzzzzzzzzz', object.__repr__( instance), instance._state.committed_state, attribute
+                r = getattr( instance.__class__, attribute).get_history( instance)
+                #print r
+                r = r[-1] or r[-2]
+                assert r    #raise KeyError ??
+                return r[0] #and r[0] or None   #should never be None??
+                return instance._state.committed_state[ attribute]
     else:
         @staticmethod
         def _orig( instance, attribute):

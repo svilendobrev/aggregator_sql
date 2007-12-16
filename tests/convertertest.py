@@ -145,11 +145,12 @@ class T_mark( unittest.TestCase):
                 )
         #correlate is non-generative in 0.3 (ret None) but generative in 0.4
         sprev = sprev.correlate( balance) or sprev
+        sprev = sprev.as_scalar()   #??? 0.3?
 
         self.Count( balance.c.total, and_(
             self.Source( trans.c.account).startswith( balance.c.account),
             self.Source( trans.c.date) <= balance.c.finaldate,
-                        trans.c.date > func.coalesce( sprev,0 )
+                        trans.c.date > func.coalesce( sprev, 0)
         ), source_tbl=trans)
 
         self.check( mapper= ('''\

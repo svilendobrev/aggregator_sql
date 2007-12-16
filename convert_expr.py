@@ -74,6 +74,7 @@ class Converter( AbstractClauseProcessor):
         self.source_tbl = source_tbl
         self.src_attrs4mapper = []
         self.corresp_src_cols = corresp_src_cols
+        AbstractClauseProcessor.__init__( self)
 
     mark_only = False
     def convert_element( self, e):
