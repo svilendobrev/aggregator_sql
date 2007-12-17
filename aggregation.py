@@ -99,13 +99,10 @@ public virtual methods/attributes - must be overloaded:
                 """Returns original value of instance attribute;
                 Raises KeyError if no original state exists
                 """
-                #print 'zzzzzzzzzzzzzzzzzzzzzzzzz', object.__repr__( instance), instance._state.committed_state, attribute
-                r = getattr( instance.__class__, attribute).get_history( instance)
-                #print r
-                r = r[-1] or r[-2]
-                assert r    #raise KeyError ??
-                return r[0] #and r[0] or None   #should never be None??
-                return instance._state.committed_state[ attribute]
+                added,unchanged,deleted = getattr( instance.__class__, attribute).get_history( instance)
+                r = deleted or unchanged
+                assert r    #raise KeyError ?? should never happen anyway
+                return r[0]
     else:
         @staticmethod
         def _orig( instance, attribute):
