@@ -152,18 +152,19 @@ class T_mark( unittest.TestCase):
             self.Source( trans.c.date) <= balance.c.finaldate,
                         trans.c.date > func.coalesce( sprev, 0)
         ), source_tbl=trans)
-
+        subsel = str(sprev)
+        as_max1 = ' AS ' in subsel and ' AS max_1' or ''
         self.check( mapper= ('''\
 :BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
 AND :BindParam(date) <= balance.finaldate \
-AND :BindParam(date) > coalesce((SELECT max(b.finaldate)
+AND :BindParam(date) > coalesce((SELECT max(b.finaldate)'''+as_max1+'''
 FROM balance AS b
 WHERE b.finaldate < balance.finaldate), :const(0))''',
                           ['account','date']),
                   recalc= ('''\
 trans.account LIKE balance.account '''+_concat+''' :const('%') \
 AND trans.date <= balance.finaldate \
-AND trans.date > coalesce((SELECT max(b.finaldate)
+AND trans.date > coalesce((SELECT max(b.finaldate)'''+as_max1+'''
 FROM balance AS b
 WHERE b.finaldate < balance.finaldate), :const(0))''',
                           [])
