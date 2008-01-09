@@ -155,7 +155,7 @@ class TestBlog(testbase.TestBase):
         blog = self.blog = Table('blog',  self.meta,
             Column( 'id',  Integer, primary_key=True),
             Column( 'date',  Date, index=True),
-            Column( 'text', String),
+            Column( 'text', Text),
             )
         self.meta.create_all()
 

@@ -253,7 +253,7 @@ class ComplexTest(testbase.TestBase):
         super(ComplexTest, self).setUp()
         users = Table('users', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
-            Column('name', String),
+            Column('name', String(30)),
             Column('blocks', Integer),
             Column('lines', Integer),
             )
@@ -406,7 +406,7 @@ class RelationsTest(testbase.TestBase):
         super(RelationsTest, self).setUp()
         users = Table('users', self.meta,
             Column('id', Integer, primary_key=True, autoincrement=True),
-            Column('name', String),
+            Column('name', String(30)),
             Column('blocks', Integer),
             Column('lines', Integer),
             )

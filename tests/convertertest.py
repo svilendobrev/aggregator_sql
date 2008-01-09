@@ -3,7 +3,7 @@
 import unittest
 import testbase
 from aggregator.convert_expr import *
-from sqlalchemy import MetaData, select, and_, Table, Column, Integer, String, Numeric, Date, func
+from sqlalchemy import MetaData, select, and_, Table, Column, Integer, Text, Numeric, Date, func
 try:
     from sqlalchemy.sql.compiler import DefaultCompiler
     _concat = '||'
@@ -60,8 +60,8 @@ class T_mark( unittest.TestCase):
         UPDATE movies SET tag_cnt = tag_cnt+1
         WHERE movies.id = :cur_movie__id
         '''
-        tags   = Table( 'tags',   self.m, Column( 'oid', Integer), Column( 'tabl',  String),  Column( 'tag', String), )
-        movies = Table( 'movies', self.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', String) )
+        tags   = Table( 'tags',   self.m, Column( 'oid', Integer), Column( 'tabl',  Text),  Column( 'tag', Text), )
+        movies = Table( 'movies', self.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', Text) )
         self.Count( movies.c.count, and_(
             SourceRecalcOnly( tags.c.tabl == "movies"),
             self.Source( tags.c.oid) == self.Target( movies.c.id, corresp_src=tags.c.oid)
@@ -85,8 +85,8 @@ class T_mark( unittest.TestCase):
         UPDATE users SET userpic_cnt = userpic_cnt+1
         WHERE users.uid = :uid AND :state = "normal"
         '''
-        users   = Table( 'users',    self.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', String), )
-        userpics= Table( 'userpics', self.m, Column( 'uid', Integer), Column( 'state', String), )
+        users   = Table( 'users',    self.m, Column( 'id',  Integer), Column( 'count', Integer), Column( 'name', Text), )
+        userpics= Table( 'userpics', self.m, Column( 'uid', Integer), Column( 'state', Text), )
         self.Count( users.c.count, and_(
             self.Target( users.c.id, corresp_src=userpics.c.uid) == self.Source( userpics.c.uid), #fkey
             self.Source( userpics.c.state) == "normal"
@@ -111,7 +111,7 @@ class T_mark( unittest.TestCase):
         WHERE stats.c.date >= :blog_date
         '''
         stats = Table( 'stats', self.m, Column( 'date1', Date), Column( 'posts_so_far', Integer), )
-        blog  = Table( 'blog',  self.m, Column( 'date',  Date), Column( 'text', String), )
+        blog  = Table( 'blog',  self.m, Column( 'date',  Date), Column( 'text', Text), )
         self.Count( stats.c.posts_so_far,
             self.Target( stats.c.date1, corresp_src=None) >= self.Source( blog.c.date),
             source_tbl= blog, corresp_src_cols= { stats.c.date1: None })
@@ -137,8 +137,8 @@ class T_mark( unittest.TestCase):
             #the subselect is to get previous_balance.finaldate.
         Needs fix if no previous_balance!
         '''
-        trans  =Table( 'trans',   self.m, Column( 'date', Date),      Column( 'account', String), Column( 'money', Numeric) )
-        balance=Table( 'balance', self.m, Column( 'finaldate', Date), Column( 'account', String), Column( 'total', Numeric) )
+        trans  =Table( 'trans',   self.m, Column( 'date', Date),      Column( 'account', Text), Column( 'money', Numeric) )
+        balance=Table( 'balance', self.m, Column( 'finaldate', Date), Column( 'account', Text), Column( 'total', Numeric) )
         b = balance.alias('b')
         sprev = select( [ func.max( b.c.finaldate)],
                     b.c.finaldate < balance.c.finaldate
@@ -181,8 +181,8 @@ WHERE b.finaldate < balance.finaldate), :const(0))''',
         AND srctrans.date <= balance.finaldate AND srctrans.date >  balance.startdate
         ## startdate === previous balance.finaldate
         '''
-        trans  =Table( 'trans',   self.m, Column( 'date', Date),      Column( 'account', String), Column( 'money', Numeric) )
-        balance=Table( 'balance', self.m, Column( 'finaldate', Date), Column( 'account', String), Column( 'total', Numeric), Column('startdate', Date) )
+        trans  =Table( 'trans',   self.m, Column( 'date', Date),      Column( 'account', Text), Column( 'money', Numeric) )
+        balance=Table( 'balance', self.m, Column( 'finaldate', Date), Column( 'account', Text), Column( 'total', Numeric), Column('startdate', Date) )
         self.Count( balance.c.total, and_(
             self.Source( trans.c.account).startswith( balance.c.account),
             self.Source( trans.c.date) <= balance.c.finaldate,
