@@ -3,6 +3,7 @@ import aggregator as a
 import unittest
 import simpletest
 from sqlalchemy import *
+Text = String(100)
 from sqlalchemy.orm import create_session, mapper, relation
 
 class SimpleTest3(simpletest.SimpleTest):

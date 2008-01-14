@@ -3,7 +3,8 @@
 import unittest
 import testbase
 from aggregator.convert_expr import *
-from sqlalchemy import MetaData, select, and_, Table, Column, Integer, Text, Numeric, Date, func
+from sqlalchemy import MetaData, select, and_, Table, Column, Integer, Numeric, Date, func, String
+Text = String(100)
 try:
     from sqlalchemy.sql.compiler import DefaultCompiler
     _concat = '||'
@@ -153,7 +154,7 @@ class T_mark( unittest.TestCase):
                         trans.c.date > func.coalesce( sprev, 0)
         ), source_tbl=trans)
         subsel = str(sprev)
-        as_max1 = ' AS ' in subsel and ' AS max_1' or ''
+        as_max1 = ') AS' in subsel and ' AS max_1' or ''
         self.check( mapper= ('''\
 :BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
 AND :BindParam(date) <= balance.finaldate \
