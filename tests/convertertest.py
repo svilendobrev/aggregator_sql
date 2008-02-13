@@ -5,12 +5,18 @@ import testbase
 from aggregator.convert_expr import *
 from sqlalchemy import MetaData, select, and_, Table, Column, Integer, Numeric, Date, func, String
 Text = String(100)
+
 try:
     from sqlalchemy.sql.compiler import DefaultCompiler
     _concat = '||'
 except ImportError:
     from sqlalchemy.ansisql import ANSICompiler as DefaultCompiler  #SA0.3
     _concat = '+'
+
+_c = Column( 'ccc', String(10))
+_a = _c.endswith( _c)
+_like_uses_bindparam = '%%' not in str(_a)
+_startswith_sfx = _concat + (_like_uses_bindparam and " :const('%')" or " '%%'")
 
 class T_mark( unittest.TestCase):
 
@@ -156,14 +162,14 @@ class T_mark( unittest.TestCase):
         subsel = str(sprev)
         as_max1 = ') AS' in subsel and ' AS max_1' or ''
         self.check( mapper= ('''\
-:BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
+:BindParam(account) LIKE balance.account '''+_startswith_sfx + ''' \
 AND :BindParam(date) <= balance.finaldate \
 AND :BindParam(date) > coalesce((SELECT max(b.finaldate)'''+as_max1+'''
 FROM balance AS b
 WHERE b.finaldate < balance.finaldate), :const(0))''',
                           ['account','date']),
                   recalc= ('''\
-trans.account LIKE balance.account '''+_concat+''' :const('%') \
+trans.account LIKE balance.account '''+_startswith_sfx + ''' \
 AND trans.date <= balance.finaldate \
 AND trans.date > coalesce((SELECT max(b.finaldate)'''+as_max1+'''
 FROM balance AS b
@@ -191,12 +197,12 @@ WHERE b.finaldate < balance.finaldate), :const(0))''',
         ), source_tbl=trans)
 
         self.check( mapper= ('''\
-:BindParam(account) LIKE balance.account '''+_concat+''' :const('%') \
+:BindParam(account) LIKE balance.account '''+_startswith_sfx + ''' \
 AND :BindParam(date) <= balance.finaldate \
 AND :BindParam(date) > balance.startdate''',
                           ['account', 'date']),
                   recalc= ('''\
-trans.account LIKE balance.account '''+_concat+''' :const('%') \
+trans.account LIKE balance.account '''+_startswith_sfx + ''' \
 AND trans.date <= balance.finaldate \
 AND trans.date > balance.startdate''',
                           [])
