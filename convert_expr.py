@@ -28,15 +28,20 @@ will mark as Target only if corresp_src_col is specified in the dict.
 '''
 
 import sqlalchemy
+
+_v03 = False
+_bindparam = sqlalchemy.bindparam
 try:
-    from sqlalchemy.sql.util import AbstractClauseProcessor
-    _v03 = False
-    _bindparam = sqlalchemy.bindparam
-except ImportError:
-    from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
-    _v03 = True
-    def _bindparam( *a, **kargs):
-        return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
+    from sqlalchemy.sql.util import AbstractClauseProcessor #<v4335
+except ImportError, e:
+    try:
+        from sqlalchemy.sql.visitors import ClauseVisitor as AbstractClauseProcessor    #>=v4335
+    except ImportError, e:
+        print e
+        from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
+        _v03 = True
+        def _bindparam( *a, **kargs):
+            return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
 
 _pfx = 'agcnv_'    #needed to distinguish SA.bindparams and our own bindparams
 
@@ -102,8 +107,8 @@ class Converter( AbstractClauseProcessor):
                     self.src_attrs4mapper.append( src_attrs4mapper)
                 if not self.mark_only:
                     return col
-
         return None
+    before_clone = convert_element
 
     @classmethod
     def apply( klas, expr, **k):
