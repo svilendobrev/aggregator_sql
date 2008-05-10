@@ -33,9 +33,12 @@ _v03 = False
 _bindparam = sqlalchemy.bindparam
 try:
     from sqlalchemy.sql.util import AbstractClauseProcessor #<v4335
+    def traverse_clone( c, e): return c.traverse( e, clone=True)
 except ImportError, e:
     try:
-        from sqlalchemy.sql.visitors import ClauseVisitor as AbstractClauseProcessor    #>=v4335
+        from sqlalchemy.sql.visitors import ReplacingCloningVisitor #>=v4335, SA0.5
+        def traverse_clone( c, e): return c.traverse( e)
+        AbstractClauseProcessor = ReplacingCloningVisitor
     except ImportError, e:
         print e
         from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
@@ -83,14 +86,11 @@ class Converter( AbstractClauseProcessor):
 
     mark_only = False
     def convert_element( self, e):
-#        print e
         if getattr( e, 'SourceRecalcOnly', None) and self.inside_mapperext:
-#            print ' > SourceRecalcOnly'
             if self.mark_only: return None      #>=r3727 anything replaced stops traversing inside that thing
             return sqlalchemy.literal( True)
 
         if isinstance( e, sqlalchemy.Column):
-#            print ' > Column', e
             try:
                 mark = e.mark
             except:
@@ -108,16 +108,16 @@ class Converter( AbstractClauseProcessor):
                 if not self.mark_only:
                     return col
         return None
-    before_clone = convert_element
+    replace = before_clone = convert_element
 
     @classmethod
     def apply( klas, expr, **k):
         c = klas(**k)
         if 1:   #>=r3727 anything replaced stops traversing inside that (original) thing
             c.mark_only = True
-            c.traverse( expr, clone=True)
+            traverse_clone( c, expr)
         c.mark_only = False
-        expr = c.traverse( expr, clone=True)
+        expr = traverse_clone( c, expr)
         return expr, c.src_attrs4mapper
 
 if _v03:
