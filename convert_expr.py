@@ -32,19 +32,22 @@ import sqlalchemy
 _v03 = False
 _bindparam = sqlalchemy.bindparam
 try:
-    from sqlalchemy.sql.util import AbstractClauseProcessor #<v4335
+    from sqlalchemy.sql.util import AbstractClauseProcessor as _ClauseProcessor #<v4335
     def traverse_clone( c, e): return c.traverse( e, clone=True)
 except ImportError, e:
     try:
-        from sqlalchemy.sql.visitors import ReplacingCloningVisitor #>=v4335, SA0.5
+        from sqlalchemy.sql.visitors import ReplacingCloningVisitor as _ClauseProcessor #SA0.5
         def traverse_clone( c, e): return c.traverse( e)
-        AbstractClauseProcessor = ReplacingCloningVisitor
     except ImportError, e:
-        print e
-        from sqlalchemy.sql_util import AbstractClauseProcessor #SA0.3
-        _v03 = True
-        def _bindparam( *a, **kargs):
-            return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
+        try:
+            from sqlalchemy.sql.visitors import ClauseVisitor as _ClauseProcessor #>=v4335, SA0.4
+            def traverse_clone( c, e): return c.traverse( e, clone=True)
+        except ImportError, e:
+            print e
+            from sqlalchemy.sql_util import AbstractClauseProcessor as _ClauseProcessor #SA0.3
+            _v03 = True
+            def _bindparam( *a, **kargs):
+                return sqlalchemy.bindparam( type=kargs.pop('type_',None), *a, **kargs)
 
 _pfx = 'agcnv_'    #needed to distinguish SA.bindparams and our own bindparams
 
@@ -74,7 +77,7 @@ class _Target( _ColumnMarker):
     ret_col_inside_mapperext = True
 
 
-class Converter( AbstractClauseProcessor):
+class Converter( _ClauseProcessor):
     _pfx = _pfx
     def __init__( self, inside_mapperext =False, target_tbl =None, source_tbl =None, corresp_src_cols ={}):
         self.inside_mapperext = inside_mapperext
@@ -82,7 +85,7 @@ class Converter( AbstractClauseProcessor):
         self.source_tbl = source_tbl
         self.src_attrs4mapper = []
         self.corresp_src_cols = corresp_src_cols
-        AbstractClauseProcessor.__init__( self)
+        _ClauseProcessor.__init__( self)
 
     mark_only = False
     def convert_element( self, e):
