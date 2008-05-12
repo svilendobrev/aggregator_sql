@@ -17,6 +17,7 @@ except ImportError:
     _v03 = True
 
 import sqlalchemy.orm.attributes
+import sqlalchemy.orm.properties
 import warnings
 
 #XXX no such thing as ifnull XXX - use coalesce, case, whatever
@@ -275,7 +276,7 @@ class Quick( MapperExtension):
         grouping_attribute = None
         # Field maybe aliased somewhere
         for propcol in mapper.iterate_properties:
-            if isinstance( propcol, sqlalchemy.orm.ColumnProperty):
+            if isinstance( propcol, sqlalchemy.orm.properties.ColumnProperty):
                 if propcol.columns[0] is k.parent:     # "==" works not as expected
                     grouping_attribute = propcol.key
                     return k, grouping_attribute

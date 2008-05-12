@@ -3,6 +3,7 @@
 import unittest
 import testbase
 from aggregator.convert_expr import *
+from aggregator.convert_expr import _v03
 from sqlalchemy import MetaData, select, and_, Table, Column, Integer, Numeric, Date, func, String
 Text = String(100)
 
@@ -153,9 +154,12 @@ class T_mark( unittest.TestCase):
         sprev = select( [ func.max( b.c.finaldate)],
                     b.c.finaldate < balance.c.finaldate
                 )
-        #correlate is non-generative in 0.3 (ret None) but generative in 0.4
-        sprev = sprev.correlate( balance) or sprev
-        sprev = sprev.as_scalar()   #??? 0.3?
+        if _v03:
+            #correlate is non-generative in 0.3 (ret None) but generative in 0.4
+            sprev.correlate( balance)
+        else:
+            sprev = sprev.correlate( balance)
+            sprev = sprev.as_scalar()
 
         self.Count( balance.c.total, and_(
             self.Source( trans.c.account).startswith( balance.c.account),
