@@ -30,10 +30,9 @@ class TestBase(unittest.TestCase):
         self.session = create_session()
 
     def tearDown(self):
-        for v in self.__dict__.values():
-            if type(v) is Table:
-                v.drop()
         self.session.close()
+        self.meta.drop_all()
+        self.meta.bind.dispose()
 
     def save(self, *objs):
         for ob in objs:

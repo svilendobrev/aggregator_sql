@@ -50,7 +50,7 @@ class T_mark( unittest.TestCase):
     def _checkClause( self, result, expect_expr, expect_attrs ):
         expr, attrs = result
         self.assertEquals( str(expr).replace(' \n', '\n'), expect_expr)
-        #not sure why the order changed in 0.5..
+        #no default order in 0.5..
         #order doesnot matter anyway - see _Aggregation.get_filter_and_bindings()
         self.assertEquals( len(attrs), len(expect_attrs))
         self.assertEquals( set(attrs), set(expect_attrs))

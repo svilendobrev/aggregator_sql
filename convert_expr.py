@@ -89,15 +89,13 @@ class Converter( _ClauseProcessor):
 
     mark_only = False
     def convert_element( self, e):
-        if getattr( e, 'SourceRecalcOnly', None) and self.inside_mapperext:
+        if getattr( e, '_ag_recalconly', None) and self.inside_mapperext:
             if self.mark_only: return None      #>=r3727 anything replaced stops traversing inside that thing
             return sqlalchemy.literal( True)
 
         if isinstance( e, sqlalchemy.Column):
-            try:
-                mark = e.mark
-            except:
-                mark = None
+            mark = getattr( e, '_ag_mark', None)
+            if mark is None:
                 if self.target_tbl and e.table == self.target_tbl:
                     corresp_src= self.corresp_src_cols.get( e, None)
                     if corresp_src: mark = _Target( e, corresp_src)
@@ -126,7 +124,7 @@ class Converter( _ClauseProcessor):
 if _v03:
     def _copymarkers( self, *a,**k):
         newobj = self.old_copy_container(*a,**k)
-        for a in 'mark SourceRecalcOnly'.split():
+        for a in ('_ag_mark', '_ag_recalconly'):
             m = getattr( self, a, None)
             if m is not None: setattr( newobj, a, m)
         return newobj
@@ -143,13 +141,13 @@ if _v03:
             return expr, c.src_attrs4mapper
 
 def Source( col, **k):
-    col.mark = _Source( col,**k)
+    col._ag_mark = _Source( col,**k)
     return col
 def Target( col, **k):
-    col.mark = _Target( col,**k)
+    col._ag_mark = _Target( col,**k)
     return col
 def SourceRecalcOnly( expr):
-    expr.SourceRecalcOnly = True
+    expr._ag_recalconly = True
     return expr
 
 # vim:ts=4:sw=4:expandtab
