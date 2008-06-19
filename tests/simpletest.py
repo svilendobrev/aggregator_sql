@@ -281,9 +281,9 @@ class ComplexTest(testbase.TestBase):
         self.blocks = blocks
         self.lines = lines
         self.users = users
+        users.create()
         blocks.create()
         lines.create()
-        users.create()
         mapper(Block, blocks,
             extension=self.aggregator_class(
                 a.Count(users.c.blocks),
@@ -434,9 +434,9 @@ class RelationsTest(testbase.TestBase):
         self.blocks = blocks
         self.lines = lines
         self.users = users
+        users.create()
         blocks.create()
         lines.create()
-        users.create()
         self.blockmapper = mapper(Block, blocks,
             extension=self.aggregator_class(
                 a.Count(users.c.blocks),
