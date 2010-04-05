@@ -85,8 +85,8 @@ public virtual methods/attributes - must be overloaded:
     filter_expr = ... #either with var-bindparams, or const-bindparams (getattr from instance)
 """
 
-
-    if hasattr( sqlalchemy.orm.attributes, 'InstanceState'):    #>v3463
+    if (hasattr( sqlalchemy.orm.attributes, 'InstanceState')    #>v3463
+       or hasattr( sqlalchemy.orm.attributes, 'state') ):       #??v5970
         if hasattr( sqlalchemy.orm.attributes, 'AttributeHistory'):    #<v3935
             @staticmethod
             def _orig( instance, attribute):
