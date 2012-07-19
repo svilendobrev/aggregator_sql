@@ -1,5 +1,5 @@
 #$Id$
-# -*- coding: cp1251 -*-
+
 
 #example: plain double-side accounting:
 #   Store .total_dt/.total_kt sums DocItem.value respective to DocItem.store_dt/store_kt

@@ -1,5 +1,5 @@
 #$Id$
-# -*- coding: cp1251 -*-
+
 
 '''Converts a sqlalchemy expression for usage in aggregator's recalc- and
 mapperext-update- level filtering.
